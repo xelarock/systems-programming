@@ -5,13 +5,20 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
+#include "pbm.h"
 
 int main(int argc, char *argv[]){
     int o;
-    int convert = 0;
-    long num;
-    char *isolateColor;
-    char *removeColor;
+    int convertToPBM = 0;
+    int convertToPGM = 0;
+    int applySepia = 0;
+    int applyMirror = 0;
+    int thumbnailScale = 0;
+    int tileScale = 0;
+    long greyScaleValue = 0;
+    int isolateColor = 0;
+    int removeColor = 0;
+    char *ptr;
 
     for ( int i=0; i<argc; i++ ){
         printf("Argument[%d]: %s\n", i, argv[i] );
@@ -21,46 +28,68 @@ int main(int argc, char *argv[]){
         switch (o) {
         case 'b':
             printf("Option 'b' present\n");
-            convert = 0;
+            convertToPBM = 1;
             break;
         case 'g':
-            printf("Option 'g' present with argument: %s\n", optarg);
-            char *ptr;
-            num = strtol(optarg, &ptr, 10);
-            if (num < 1 || num > 65535) {
+            greyScaleValue = strtol(optarg, &ptr, 10);
+            if (greyScaleValue < 1 || greyScaleValue > 65535) {
                 fprintf(stderr, "Error: Invalid max grayscale pixel value: %s\n", optarg);
                 exit(1);
             }
-            convert = 1;
+            printf("Option 'g' present with argument: %ld\n", greyScaleValue);
+            convertToPGM = 1;
             break;
         case 'i':
-            printf("Option 'i' present with argument: %s\n", optarg);
             if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
                 fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
                 exit(1);
             }
-            //isolateColor = (char *) malloc(strlen(optarg) + 1);
-            //isolateColor = optarg;
-            //printf("Color Isolated: %s", isolateColor);
+            if (strcmp("red", optarg) == 0){
+                isolateColor = 1;
+            }else if (strcmp("green", optarg) == 0){
+                isolateColor = 2;
+            }else if (strcmp("blue", optarg) == 0){
+                isolateColor = 3;
+            }
+            printf("Option 'i' present with argument: %s or %d\n", optarg, isolateColor);
             break;
         case 'r':
-            printf("Option 'r' present with argument: %s\n", optarg);
             if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
                 fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
                 exit(1);
             }
+            if (strcmp("red", optarg) == 0){
+                removeColor = 1;
+            }else if (strcmp("green", optarg) == 0){
+                removeColor = 2;
+            }else if (strcmp("blue", optarg) == 0){
+                removeColor = 3;
+            }
+            printf("Option 'r' present with argument: %s or %d\n", optarg, removeColor);
             break;
         case 's':
             printf("Option 's' present\n");
+            applySepia = 1;
             break;
         case 'm':
             printf("Option 'm' present\n");
+            applyMirror = 1;
             break;
         case 't':
-            printf("Option 't' present with argument: %s\n", optarg);
+            thumbnailScale = strtol(optarg, &ptr, 10);
+            if (thumbnailScale < 1 || thumbnailScale > 8){
+                fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
+                exit(1);
+            }
+            printf("Option 't' present with argument: %d\n", thumbnailScale);
             break;
         case 'n':
-            printf("Option 'n' present with argument: %s\n", optarg);
+            tileScale = strtol(optarg, &ptr, 10);
+            if (tileScale < 1 || tileScale > 8){
+                fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
+                exit(1);
+            }
+            printf("Option 'n' present with argument: %d\n", tileScale);
             break;
         case 'o':
             printf("Option 'o' present with argument: %s\n", optarg);
@@ -72,9 +101,45 @@ int main(int argc, char *argv[]){
         }
     }
 
+ //   PPMImage *inputPic = read_ppmfile(argv[argc-1]);
 
     printf("Input File: %s\n", argv[argc-1]);
+    printf("Convert to PBM: %d\nConvert to PGM: %d\nPGM Value: %ld\n", convertToPBM, convertToPGM, greyScaleValue);
+    printf("Isolate: %d\nRemove: %d\nSepia: %d\nMirror: %d\n", isolateColor, removeColor, applySepia, applyMirror);
+    printf("Thumbnail Scale: %d\nTiling Scale: %d\nOutput: %s\n", thumbnailScale, tileScale, optarg);
 
     return 0;
+}
+
+PPMImage *new_ppmimage(unsigned int width, unsigned int height, unsigned int max){
+    PPMImage ppm;
+    ppm.width = malloc(width * sizeof(unsigned int));
+    ppm.height = malloc(height * sizeof(unsigned int));
+    ppm.max = malloc(sizeof(unsigned int));
+
+    ppm.width = width;
+    ppm.height = height;
+    ppm.max = max;
+
+    return ppm;
+}
+
+PGMImage *new_pgmimage( unsigned int width, unsigned int height, unsigned int max){
+
+}
+
+PBMImage *new_pbmimage( unsigned int width, unsigned int height ){
+
+}
+
+void del_ppmimage( PPMImage * ){
+
+}
+
+void del_pgmimage( PGMImage * ){
+
+}
+
+void del_pbmimage( PBMImage * ){
 
 }
