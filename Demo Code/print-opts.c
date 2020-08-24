@@ -8,13 +8,16 @@ int main(int argc, char *argv[]){
         printf("Argument[%d]: %s\n", i, argv[i] );
     }
     
-    while ((o = getopt(argc, argv, "ab:")) != -1) {
+    while ((o = getopt(argc, argv, "ab:c:")) != -1) {
         switch (o) {
         case 'a':
             printf("Option 'a' present\n");
             break;
         case 'b':
             printf("Option 'b' present. Arg = %s\n", optarg);
+            break;
+        case 'c':
+            printf("Option 'c' present. Arg = %s\n", optarg);
             break;
         default: /* '?' */
             printf("Unexpected option\n");
