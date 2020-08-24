@@ -143,3 +143,29 @@ void del_pgmimage( PGMImage * ){
 void del_pbmimage( PBMImage * ){
 
 }
+
+PBMImage convertToBitmap (PPMImage image){
+
+}
+
+PGMImage convertToGreyscale (PPMImage image){
+    
+}
+
+PPMImage applySepiaTransformation (PPMImage image){
+    //NewR = 0.393(OldR) + 0.769(OldG) + 0.189(OldB) 
+    //NewG = 0.349(OldR) + 0.686(OldG) + 0.168𝑥(OldB) 
+    //NewB = 0.272(OldR) + 0.534(OldG) + 0.131𝑥(OldB)
+}
+
+PPMImage mirrorImage (PPMImage image){
+    
+}
+
+PPMImage createThumbnail (PPMImage image){
+    
+}
+
+PPMImage tileImages (PPMImage image){       // what does this mean? like if n=2 and original is 100*100, then out is 50*100
+    
+}
