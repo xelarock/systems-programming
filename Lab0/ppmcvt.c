@@ -112,60 +112,82 @@ int main(int argc, char *argv[]){
 }
 
 PPMImage *new_ppmimage(unsigned int width, unsigned int height, unsigned int max){
-    PPMImage ppm;
-    ppm.width = malloc(width * sizeof(unsigned int));
-    ppm.height = malloc(height * sizeof(unsigned int));
-    ppm.max = malloc(sizeof(unsigned int));
+    PPMImage *ppm;
+    ppm = malloc(sizeof(PPMImage));
 
-    ppm.width = width;
-    ppm.height = height;
-    ppm.max = max;
+    ppm->width = width;
+    ppm->height = height;
+    ppm->max = max;
 
-    return ppm;
+    ppm->pixmap = malloc(height * sizeof(unsigned int));
+    for (unsigned int h=0; h<height; h++){
+        ppm.pixmap[h] = malloc  (width * 3 * sizeof(unsigned int));
+    }
+
+    return &ppm;
 }
 
 PGMImage *new_pgmimage( unsigned int width, unsigned int height, unsigned int max){
+    PGMImage pgm;
+    pgm.width = malloc(width * sizeof(unsigned int));
+    pgm.height = malloc(height * sizeof(unsigned int));
+    pgm.max = malloc(sizeof(unsigned int));
 
+    pgm.width = width;
+    pgm.height = height;
+    pgm.max = max;
+
+    return &pgm;
 }
 
 PBMImage *new_pbmimage( unsigned int width, unsigned int height ){
+    PBMImage *pbm;
+    pbm = malloc(sizeof(PBMImage));
+    pbm->width = width;
+    pbm->height = height;
 
+    pbm->pixmap = malloc(height * sizeof(unsigned int *));
+    for (int h = 0; h < height; h++){
+        pbm->pixmap[h] = malloc(width * sizeof(unsigned int));
+    }
+
+    return pbm;
 }
 
-void del_ppmimage( PPMImage * ){
+// void del_ppmimage( PPMImage * ){
 
-}
+// }
 
-void del_pgmimage( PGMImage * ){
+// void del_pgmimage( PGMImage * ){
 
-}
+// }
 
-void del_pbmimage( PBMImage * ){
+// void del_pbmimage( PBMImage * ){
 
-}
+// }
 
-PBMImage convertToBitmap (PPMImage image){
+// PBMImage convertToBitmap (PPMImage image){
 
-}
+// }
 
-PGMImage convertToGreyscale (PPMImage image){
+// PGMImage convertToGreyscale (PPMImage image){
     
-}
+// }
 
-PPMImage applySepiaTransformation (PPMImage image){
-    //NewR = 0.393(OldR) + 0.769(OldG) + 0.189(OldB) 
-    //NewG = 0.349(OldR) + 0.686(OldG) + 0.168𝑥(OldB) 
-    //NewB = 0.272(OldR) + 0.534(OldG) + 0.131𝑥(OldB)
-}
+// PPMImage applySepiaTransformation (PPMImage image){
+//     //NewR = 0.393(OldR) + 0.769(OldG) + 0.189(OldB) 
+//     //NewG = 0.349(OldR) + 0.686(OldG) + 0.168𝑥(OldB) 
+//     //NewB = 0.272(OldR) + 0.534(OldG) + 0.131𝑥(OldB)
+// }
 
-PPMImage mirrorImage (PPMImage image){
+// PPMImage mirrorImage (PPMImage image){
     
-}
+// }
 
-PPMImage createThumbnail (PPMImage image){
+// PPMImage createThumbnail (PPMImage image){
     
-}
+// }
 
-PPMImage tileImages (PPMImage image){       // what does this mean? like if n=2 and original is 100*100, then out is 50*100
-    
-}
+// PPMImage tileImages (PPMImage image){       // what does this mean? like if n=2 and original is 100*100, then out is 50*100
+
+// }
