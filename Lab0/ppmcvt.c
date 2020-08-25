@@ -128,16 +128,17 @@ PPMImage *new_ppmimage(unsigned int width, unsigned int height, unsigned int max
 }
 
 PGMImage *new_pgmimage( unsigned int width, unsigned int height, unsigned int max){
-    PGMImage pgm;
-    pgm.width = malloc(width * sizeof(unsigned int));
-    pgm.height = malloc(height * sizeof(unsigned int));
-    pgm.max = malloc(sizeof(unsigned int));
+    PGMImage *pgm;
+    pgm = malloc(sizeof(PGMImage));
+    pgm->width = width;
+    pgm->height = height;
+    pgm->max = max;
 
-    pgm.width = width;
-    pgm.height = height;
-    pgm.max = max;
-
-    return &pgm;
+    pgm->pixmap = malloc(height * sizeof(unsigned int *));
+    for (int h = 0; h < height; h++){
+        pgm->pixmap[h] = malloc(width * sizeof(unsigned int));
+    }
+    return pgm;
 }
 
 PBMImage *new_pbmimage( unsigned int width, unsigned int height ){
@@ -150,7 +151,6 @@ PBMImage *new_pbmimage( unsigned int width, unsigned int height ){
     for (int h = 0; h < height; h++){
         pbm->pixmap[h] = malloc(width * sizeof(unsigned int));
     }
-
     return pbm;
 }
 
