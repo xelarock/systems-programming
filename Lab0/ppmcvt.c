@@ -101,12 +101,14 @@ int main(int argc, char *argv[]){
         }
     }
 
- //   PPMImage *inputPic = read_ppmfile(argv[argc-1]);
-
     printf("Input File: %s\n", argv[argc-1]);
     printf("Convert to PBM: %d\nConvert to PGM: %d\nPGM Value: %ld\n", convertToPBM, convertToPGM, greyScaleValue);
     printf("Isolate: %d\nRemove: %d\nSepia: %d\nMirror: %d\n", isolateColor, removeColor, applySepia, applyMirror);
     printf("Thumbnail Scale: %d\nTiling Scale: %d\nOutput: %s\n", thumbnailScale, tileScale, optarg);
+
+    printf("############3");
+    
+    PPMImage *inputPic = read_ppmfile(argv[argc-1]);
 
     return 0;
 }
@@ -115,16 +117,19 @@ PPMImage *new_ppmimage(unsigned int width, unsigned int height, unsigned int max
     PPMImage *ppm;
     ppm = malloc(sizeof(PPMImage));
 
+    printf("++++++++++++++");
+
     ppm->width = width;
     ppm->height = height;
     ppm->max = max;
 
-    ppm->pixmap = malloc(height * sizeof(unsigned int));
-    for (unsigned int h=0; h<height; h++){
-        ppm.pixmap[h] = malloc  (width * 3 * sizeof(unsigned int));
+    for (int i = 0; i <= 2; i++){
+        printf("height********* %d", height);
+        ppm->pixmap[i] = malloc(height * sizeof(unsigned int));
+        for (unsigned int h=0; h<=height; h++)
+            ppm->pixmap[i][h] = malloc  (width * 3 * sizeof(unsigned int));
     }
-
-    return &ppm;
+    return ppm;
 }
 
 PGMImage *new_pgmimage( unsigned int width, unsigned int height, unsigned int max){
@@ -135,9 +140,8 @@ PGMImage *new_pgmimage( unsigned int width, unsigned int height, unsigned int ma
     pgm->max = max;
 
     pgm->pixmap = malloc(height * sizeof(unsigned int *));
-    for (int h = 0; h < height; h++){
+    for (int h = 0; h < height; h++)
         pgm->pixmap[h] = malloc(width * sizeof(unsigned int));
-    }
     return pgm;
 }
 
@@ -148,23 +152,33 @@ PBMImage *new_pbmimage( unsigned int width, unsigned int height ){
     pbm->height = height;
 
     pbm->pixmap = malloc(height * sizeof(unsigned int *));
-    for (int h = 0; h < height; h++){
+    for (int h = 0; h < height; h++)
         pbm->pixmap[h] = malloc(width * sizeof(unsigned int));
-    }
     return pbm;
 }
 
-// void del_ppmimage( PPMImage * ){
+void del_ppmimage( PPMImage * ppm){
+    for (int i = 0; i<= 2; i++){
+        for (int h = 0; h < ppm->height; h++)
+            free(ppm->pixmap[i][h]);
+    }
+    free(ppm->pixmap);
+    free(ppm);
+}
 
-// }
+void del_pgmimage( PGMImage * pgm){
+    for (int h = 0; h < pgm->height; h++)
+        free(pgm->pixmap[h]);
+    free(pgm->pixmap);
+    free(pgm);
+}
 
-// void del_pgmimage( PGMImage * ){
-
-// }
-
-// void del_pbmimage( PBMImage * ){
-
-// }
+void del_pbmimage( PBMImage * pbm){
+    for (int h = 0; h < pbm->height; h++)
+        free(pbm->pixmap[h]);
+    free(pbm->pixmap);
+    free(pbm);
+}
 
 // PBMImage convertToBitmap (PPMImage image){
 
