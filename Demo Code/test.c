@@ -14,14 +14,16 @@ int main(int argc, char *argv[]){
     // num = strtol(str, &ptr, 10);
     // printf("Num = %ld", num);
 
-    char input[strlen("red") + 1] = "red";
+    // char input[strlen("red") + 1] = "red";
 
-    printf("string: %s\n", input);
+    // printf("string: %s\n", input);
 
-    char *str;
+    // char *str;
 
-    str = (char *) malloc(strlen(input) + 1);
-    strcpy(str, input);
-    printf("out: %s", str);
+    // str = (char *) malloc(strlen(input) + 1);
+    // strcpy(str, input);
+    // printf("out: %s", str);
+
+    printf(sizeof("hello"));
 
 }
