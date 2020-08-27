@@ -6,24 +6,34 @@
 #include <stdlib.h>
 
 int main(int argc, char *argv[]){
-    // char str[] = "65535";
-    // char *ptr;
-    // long num;
+    int array[4][4] = {{2, 2, 1, 1},
+                       {2, 2, 1, 1},
+                       {2, 2, 1, 1},
+                       {2, 2, 1, 1},};
+    int arrayWidth = 4;
+    int arrayHeigth = 4;
 
-    // printf("len = %lu", strlen(str) + 1);
-    // num = strtol(str, &ptr, 10);
-    // printf("Num = %ld", num);
+    //printf("%d", arrayWidth / 2);
 
-    // char input[strlen("red") + 1] = "red";
+    for (int h = 0; h < arrayHeigth; h++){
+        for (int w = 0; w < arrayWidth ; w++){
+            printf("%d", array[h][w]);
+        }
+        printf("\n");
+    }
 
-    // printf("string: %s\n", input);
+    for (int h = 0; h < arrayHeigth; h++){
+        for (int w = 0; w < arrayWidth/2 ; w++){
+            array[h][arrayWidth - 1 - w] = array[h][w];
+        }
+    }
 
-    // char *str;
+    for (int h = 0; h < arrayHeigth; h++){
+        for (int w = 0; w < arrayWidth ; w++){
+            printf("%d ", array[h][w]);
+        }
+        printf("\n");
+    }
 
-    // str = (char *) malloc(strlen(input) + 1);
-    // strcpy(str, input);
-    // printf("out: %s", str);
-
-    printf(sizeof("hello"));
 
 }
