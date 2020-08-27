@@ -18,6 +18,7 @@ void checkMultipleTransformations (int numTrans);
 PBMImage * convertToBitmap (PPMImage *image);
 PGMImage * convertToGreyscale (PPMImage *ppm, long greyScaleMax);
 PPMImage * applypSepiaTransformation (PPMImage *image);
+PPMImage * mirrorImage (PPMImage * image);
 
 int main(int argc, char *argv[]){
 
@@ -38,6 +39,9 @@ int main(int argc, char *argv[]){
         write_pgmfile(outputImage, *opts.output);
     }else if (opts.applySepia == 1){
         PPMImage *outputImage = applypSepiaTransformation(inputPic);
+        write_ppmfile(outputImage, *opts.output);
+    }else if (opts.applyMirror == 1){
+        PPMImage *outputImage = mirrorImage(inputPic);
         write_ppmfile(outputImage, *opts.output);
     }
 
@@ -241,9 +245,25 @@ PPMImage * applypSepiaTransformation (PPMImage *image){
     return ppm;
 }
 
-// PPMImage mirrorImage (PPMImage image){
-    
-// }
+PPMImage * mirrorImage (PPMImage * image){
+    unsigned int height = image->height;
+    unsigned int width = image->width;
+    unsigned int max = image->max;
+    PPMImage *ppm = new_ppmimage(width, height, max);
+    for (int h = 0; h < height; h++){
+        for (int w = 0; w < width/2 ; w++){
+            ppm->pixmap[0][h][width - 1 - w] = image->pixmap[0][h][w];
+            ppm->pixmap[1][h][width - 1 - w] = image->pixmap[1][h][w];
+            ppm->pixmap[2][h][width - 1 - w] = image->pixmap[2][h][w];
+        }
+        for (int w = 0; w <= width/2 ; w++){
+            ppm->pixmap[0][h][w] = image->pixmap[0][h][w];
+            ppm->pixmap[1][h][w] = image->pixmap[1][h][w];
+            ppm->pixmap[2][h][w] = image->pixmap[2][h][w];
+        }
+    }
+    return ppm;
+}
 
 // PPMImage createThumbnail (PPMImage image){
     
