@@ -36,6 +36,23 @@ int main(int argc, char *argv[]){
     // }
 
     printf("%d", (int) 10%3);
-
+    int o;
+    while (optind < argc){
+        if((o = getopt(argc, argv, "bg:")) != -1){
+            switch (o) {
+            case 'b':
+                printf("case b\n");
+                break;
+            case 'g':
+                printf("Case g with arg: %s\n", optarg);
+                break;
+            default:
+                break;
+            }
+        }else {
+            printf("Non-option Arg: %s\n", argv[optind]);
+            optind ++;
+        }
+    }
 
 }

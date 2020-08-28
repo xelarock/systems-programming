@@ -33,7 +33,6 @@ int main(int argc, char *argv[]){
     }
 
     Options opts = parseArgs(argc, argv);
-
     PPMImage *inputPic = read_ppmfile(opts.input);
 
     if (opts.convertToPBM == 1){
@@ -101,6 +100,7 @@ Options parseArgs(int argc, char *argv[]){
     opts.removeColor = 0;
     opts.greyScaleValue = 0;
     int containsOutput = 0;
+    int containsInput = 0;
     int o;
     char *ptr;
     int moreThanOneTrans = 0;
@@ -109,113 +109,114 @@ Options parseArgs(int argc, char *argv[]){
         printf("Argument[%d]: %s\n", i, argv[i] );
     }
 
-    while ((o = getopt(argc, argv, "bg:i:r:smt:n:o:")) != -1) {
-        switch (o) {
-        case 'b':
-            printf("Option 'b' present\n");
-            opts.convertToPBM = 1;
-            moreThanOneTrans+=1;
-            break;
-        case 'g':
-            checkMultipleTransformations(moreThanOneTrans);
-            opts.greyScaleValue = strtol(optarg, &ptr, 10);
-            if (opts.greyScaleValue < 1 || opts.greyScaleValue > 65535) {
-                fprintf(stderr, "Error: Invalid max grayscale pixel value: %s\n", optarg);
+    while (optind < argc){
+        if ((o = getopt(argc, argv, "bg:i:r:smt:n:o:")) != -1) {
+            switch (o) {
+            case 'b':
+                printf("Option 'b' present\n");
+                opts.convertToPBM = 1;
+                moreThanOneTrans+=1;
+                break;
+            case 'g':
+                checkMultipleTransformations(moreThanOneTrans);
+                opts.greyScaleValue = strtol(optarg, &ptr, 10);
+                if (opts.greyScaleValue < 1 || opts.greyScaleValue > 65535) {
+                    fprintf(stderr, "Error: Invalid max grayscale pixel value: %s\n", optarg);
+                    exit(1);
+                }
+                printf("Option 'g' present with argument: %ld\n", opts.greyScaleValue);
+                opts.convertToPGM = 1;
+                moreThanOneTrans+=1;
+                break;
+            case 'i':
+                checkMultipleTransformations(moreThanOneTrans);
+                if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
+                    fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
+                    exit(1);
+                }
+                if (strcmp("red", optarg) == 0){
+                    opts.isolateColor = 1;
+                }else if (strcmp("green", optarg) == 0){
+                    opts.isolateColor = 2;
+                }else if (strcmp("blue", optarg) == 0){
+                    opts.isolateColor = 3;
+                }
+                printf("Option 'i' present with argument: %s or %d\n", optarg, opts.isolateColor);
+                moreThanOneTrans+=1;
+                break;
+            case 'r':
+                checkMultipleTransformations(moreThanOneTrans);
+                if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
+                    fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
+                    exit(1);
+                }
+                if (strcmp("red", optarg) == 0){
+                    opts.removeColor = 1;
+                }else if (strcmp("green", optarg) == 0){
+                    opts.removeColor = 2;
+                }else if (strcmp("blue", optarg) == 0){
+                    opts.removeColor = 3;
+                }
+                printf("Option 'r' present with argument: %s or %d\n", optarg, opts.removeColor);
+                moreThanOneTrans+=1;
+                break;
+            case 's':
+                checkMultipleTransformations(moreThanOneTrans);
+                printf("Option 's' present\n");
+                opts.applySepia = 1;
+                moreThanOneTrans+=1;
+                break;
+            case 'm':
+                checkMultipleTransformations(moreThanOneTrans);
+                printf("Option 'm' present\n");
+                opts.applyMirror = 1;
+                moreThanOneTrans+=1;
+                break;
+            case 't':
+                checkMultipleTransformations(moreThanOneTrans);
+                opts.thumbnailScale = strtol(optarg, &ptr, 10);
+                if (opts.thumbnailScale < 1 || opts.thumbnailScale > 8){
+                    fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
+                    exit(1);
+                }
+                printf("Option 't' present with argument: %d\n", opts.thumbnailScale);
+                moreThanOneTrans+=1;
+                break;
+            case 'n':
+                checkMultipleTransformations(moreThanOneTrans);
+                opts.tileScale = strtol(optarg, &ptr, 10);
+                if (opts.tileScale < 1 || opts.tileScale > 8){
+                    fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
+                    exit(1);
+                }
+                printf("Option 'n' present with argument: %d\n", opts.tileScale);
+                moreThanOneTrans+=1;
+                break;
+            case 'o':
+                opts.output = optarg;
+                containsOutput = 1;
+                break;
+            default:
+                fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
                 exit(1);
+                break;
             }
-            printf("Option 'g' present with argument: %ld\n", opts.greyScaleValue);
-            opts.convertToPGM = 1;
-            moreThanOneTrans+=1;
-            break;
-        case 'i':
-            checkMultipleTransformations(moreThanOneTrans);
-            if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
-                fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
-                exit(1);
-            }
-            if (strcmp("red", optarg) == 0){
-                opts.isolateColor = 1;
-            }else if (strcmp("green", optarg) == 0){
-                opts.isolateColor = 2;
-            }else if (strcmp("blue", optarg) == 0){
-                opts.isolateColor = 3;
-            }
-            printf("Option 'i' present with argument: %s or %d\n", optarg, opts.isolateColor);
-            moreThanOneTrans+=1;
-            break;
-        case 'r':
-            checkMultipleTransformations(moreThanOneTrans);
-            printf("heloooooooooo");
-            if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
-                fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
-                exit(1);
-            }
-            if (strcmp("red", optarg) == 0){
-                opts.removeColor = 1;
-            }else if (strcmp("green", optarg) == 0){
-                opts.removeColor = 2;
-            }else if (strcmp("blue", optarg) == 0){
-                opts.removeColor = 3;
-            }
-            printf("Option 'r' present with argument: %s or %d\n", optarg, opts.removeColor);
-            moreThanOneTrans+=1;
-            break;
-        case 's':
-            checkMultipleTransformations(moreThanOneTrans);
-            printf("Option 's' present\n");
-            opts.applySepia = 1;
-            moreThanOneTrans+=1;
-            break;
-        case 'm':
-            checkMultipleTransformations(moreThanOneTrans);
-            printf("Option 'm' present\n");
-            opts.applyMirror = 1;
-            moreThanOneTrans+=1;
-            break;
-        case 't':
-            checkMultipleTransformations(moreThanOneTrans);
-            opts.thumbnailScale = strtol(optarg, &ptr, 10);
-            if (opts.thumbnailScale < 1 || opts.thumbnailScale > 8){
-                fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
-                exit(1);
-            }
-            printf("Option 't' present with argument: %d\n", opts.thumbnailScale);
-            moreThanOneTrans+=1;
-            break;
-        case 'n':
-            checkMultipleTransformations(moreThanOneTrans);
-            opts.tileScale = strtol(optarg, &ptr, 10);
-            if (opts.tileScale < 1 || opts.tileScale > 8){
-                fprintf(stderr, "Error: Invalid scale factor: %s; must be 1-8\n", optarg);
-                exit(1);
-            }
-            printf("Option 'n' present with argument: %d\n", opts.tileScale);
-            moreThanOneTrans+=1;
-            break;
-        case 'o':
-            opts.output = optarg;
-            containsOutput = 1;
-            break;
-        default:
-            fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
-            exit(1);
-            break;
+        }else{
+            printf("Input File: %s\n", argv[optind]);
+            opts.input = argv[optind];
+            optind ++;
+            containsInput = 1;
         }
-    }
-
-    if (optind < argc){
-        printf("Input File: %s\n", argv[optind]);
-        opts.input = argv[optind];
-    }else{
-        fprintf(stderr, "Error: No input file specified\n");
-        exit(1);
     }
 
     if (containsOutput == 0){
         fprintf(stderr, "Error: No output file specified\n");
         exit(1);
     }
-
+    if (containsInput == 0){
+        fprintf(stderr, "Error: No input file specified\n");
+        exit(1);
+    }
     if (moreThanOneTrans == 0){
         opts.convertToPBM = 1;
     }
@@ -314,33 +315,47 @@ PPMImage * mirrorImage (PPMImage *image){
 }
 
 PPMImage * isolateColor (PPMImage *image, int isolateColor){
+    unsigned int height = image->height;
+    unsigned int width = image->width;
+    unsigned int max = image->max;
+    PPMImage *ppm = new_ppmimage(width, height, max);
     isolateColor = isolateColor - 1;
-    for (int h = 0; h < image->height; h++){
-        for (int w = 0; w < image->width; w++){
+    for (int h = 0; h < height; h++){
+        for (int w = 0; w < width; w++){
             if (isolateColor == 0){
-                image->pixmap[1][h][w] = 0;
-                image->pixmap[2][h][w] = 0;
+                ppm->pixmap[0][h][w] = image->pixmap[0][h][w];
+                ppm->pixmap[1][h][w] = 0;
+                ppm->pixmap[2][h][w] = 0;
             }else if (isolateColor == 1){
-                image->pixmap[0][h][w] = 0;
-                image->pixmap[2][h][w] = 0;
+                ppm->pixmap[0][h][w] = 0;
+                ppm->pixmap[1][h][w] = image->pixmap[0][h][w];
+                ppm->pixmap[2][h][w] = 0;
             }
             else if (isolateColor == 2){
-                image->pixmap[0][h][w] = 0;
-                image->pixmap[1][h][w] = 0;
+                ppm->pixmap[0][h][w] = 0;
+                ppm->pixmap[1][h][w] = 0;
+                ppm->pixmap[2][h][w] = image->pixmap[0][h][w];
             }
         }
     }
-    return image;
+    return ppm;
 }
 
 PPMImage * removeColor (PPMImage *image, int removeColor){
+    unsigned int height = image->height;
+    unsigned int width = image->width;
+    unsigned int max = image->max;
+    PPMImage *ppm = new_ppmimage(width, height, max);
     removeColor = removeColor - 1;
-    for (int h = 0; h < image->height; h++){
-        for (int w = 0; w < image->width; w++){
-            image->pixmap[removeColor][h][w] = 0;
+    for (int h = 0; h < height; h++){
+        for (int w = 0; w < width; w++){
+            ppm->pixmap[0][h][w] = image->pixmap[0][h][w];
+            ppm->pixmap[1][h][w] = image->pixmap[1][h][w];
+            ppm->pixmap[2][h][w] = image->pixmap[2][h][w];
+            ppm->pixmap[removeColor][h][w] = 0;
         }
     }
-    return image;
+    return ppm;
 }
 
 PPMImage * createThumbnail (PPMImage *image, int thumbnailScale){
