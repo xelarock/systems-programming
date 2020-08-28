@@ -10,7 +10,8 @@
 typedef struct {
     int convertToPBM, convertToPGM, applySepia, applyMirror, thumbnailScale, tileScale, isolateColor, removeColor;
     long greyScaleValue;
-    char *output[60];
+    char *output;
+    char *input;
 }Options;
 
 Options parseArgs(int argc, char *argv[]);
@@ -33,35 +34,57 @@ int main(int argc, char *argv[]){
 
     Options opts = parseArgs(argc, argv);
 
-    PPMImage *inputPic = read_ppmfile(argv[argc-1]);
+    PPMImage *inputPic = read_ppmfile(opts.input);
 
     if (opts.convertToPBM == 1){
         PBMImage *outputImage = convertToBitmap(inputPic);
-        write_pbmfile(outputImage, *opts.output);
+        write_pbmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_pbmimage(outputImage);
+        exit(0);
     }else if (opts.convertToPGM == 1){
         PGMImage *outputImage = convertToGreyscale(inputPic, opts.greyScaleValue);
-        write_pgmfile(outputImage, *opts.output);
+        write_pgmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_pgmimage(outputImage);
+        exit(0);
     }else if (opts.applySepia == 1){
         PPMImage *outputImage = applypSepiaTransformation(inputPic);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }else if (opts.applyMirror == 1){
         PPMImage *outputImage = mirrorImage(inputPic);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }else if (opts.thumbnailScale >= 1){
         PPMImage *outputImage = createThumbnail(inputPic, opts.thumbnailScale);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }else if (opts.tileScale >= 1){
         PPMImage *outputImage = tileImages(inputPic, opts.tileScale);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }else if (opts.isolateColor >= 1){
         PPMImage *outputImage = isolateColor(inputPic, opts.isolateColor);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }else if (opts.removeColor >= 1){
         PPMImage *outputImage = removeColor(inputPic, opts.removeColor);
-        write_ppmfile(outputImage, *opts.output);
+        write_ppmfile(outputImage, opts.output);
+        del_ppmimage(inputPic);
+        del_ppmimage(outputImage);
+        exit(0);
     }
-
-    //write_ppmfile(inputPic, *opts.output);
 
     return 0;
 }
@@ -77,6 +100,7 @@ Options parseArgs(int argc, char *argv[]){
     opts.isolateColor = 0;
     opts.removeColor = 0;
     opts.greyScaleValue = 0;
+    int containsOutput = 0;
     int o;
     char *ptr;
     int moreThanOneTrans = 0;
@@ -121,6 +145,7 @@ Options parseArgs(int argc, char *argv[]){
             break;
         case 'r':
             checkMultipleTransformations(moreThanOneTrans);
+            printf("heloooooooooo");
             if (!(strcmp("red", optarg) == 0 || strcmp("green", optarg) == 0 || strcmp("blue", optarg) == 0)) {
                 fprintf(stderr, "Error: invalid channel specification: (%s); should be 'red', 'green' or 'blue'\n", optarg);
                 exit(1);
@@ -168,7 +193,8 @@ Options parseArgs(int argc, char *argv[]){
             moreThanOneTrans+=1;
             break;
         case 'o':
-            *opts.output = optarg;
+            opts.output = optarg;
+            containsOutput = 1;
             break;
         default:
             fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
@@ -177,14 +203,26 @@ Options parseArgs(int argc, char *argv[]){
         }
     }
 
+    if (optind < argc){
+        printf("Input File: %s\n", argv[optind]);
+        opts.input = argv[optind];
+    }else{
+        fprintf(stderr, "Error: No input file specified\n");
+        exit(1);
+    }
+
+    if (containsOutput == 0){
+        fprintf(stderr, "Error: No output file specified\n");
+        exit(1);
+    }
+
     if (moreThanOneTrans == 0){
         opts.convertToPBM = 1;
     }
 
-    printf("Input File: %s\n", argv[argc-1]);
     printf("Convert to PBM: %d\nConvert to PGM: %d\nGreyScale Value: %ld\n", opts.convertToPBM, opts.convertToPGM, opts.greyScaleValue);
     printf("Isolate: %d\nRemove: %d\nSepia: %d\nMirror: %d\n", opts.isolateColor, opts.removeColor, opts.applySepia, opts.applyMirror);
-    printf("Thumbnail Scale: %d\nTiling Scale: %d\nOutput: %s\n", opts.thumbnailScale, opts.tileScale, *opts.output);
+    printf("Thumbnail Scale: %d\nTiling Scale: %d\nOutput: %s\n", opts.thumbnailScale, opts.tileScale, opts.output);
 
     return opts;
 }
@@ -318,7 +356,6 @@ PPMImage * createThumbnail (PPMImage *image, int thumbnailScale){
     PPMImage *ppm = new_ppmimage(width, height, max);
     for (int h = 0; h < height; h++){
         for (int w = 0; w < width ; w++){
-            //printf("H: %d, W: %d", h * thumbnailScale, w * thumbnailScale);
             ppm->pixmap[0][h][w] = image->pixmap[0][h * thumbnailScale][w * thumbnailScale];
             ppm->pixmap[1][h][w] = image->pixmap[1][h * thumbnailScale][w * thumbnailScale];
             ppm->pixmap[2][h][w] = image->pixmap[2][h * thumbnailScale][w * thumbnailScale];
@@ -349,6 +386,7 @@ PPMImage * tileImages (PPMImage *image, int tileScale){
         thumbWidth = 0;
         thumbHeight++;
     }
+    del_ppmimage(thumbnail);
     return ppm;
 }
 
@@ -402,7 +440,6 @@ void del_ppmimage( PPMImage * ppm){
         for (int h = 0; h < ppm->height; h++)
             free(ppm->pixmap[i][h]);
     }
-    free(ppm->pixmap);
     free(ppm);
 }
 
