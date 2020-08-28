@@ -18,7 +18,11 @@ void checkMultipleTransformations (int numTrans);
 PBMImage * convertToBitmap (PPMImage *image);
 PGMImage * convertToGreyscale (PPMImage *ppm, long greyScaleMax);
 PPMImage * applypSepiaTransformation (PPMImage *image);
-PPMImage * mirrorImage (PPMImage * image);
+PPMImage * mirrorImage (PPMImage *image);
+PPMImage * createThumbnail (PPMImage *image, int thumbnailScale);
+PPMImage * tileImages (PPMImage *image, int tileScale);
+PPMImage * isolateColor (PPMImage *image, int isolateColor);
+PPMImage * removeColor (PPMImage *image, int removeColor);
 
 int main(int argc, char *argv[]){
 
@@ -42,6 +46,18 @@ int main(int argc, char *argv[]){
         write_ppmfile(outputImage, *opts.output);
     }else if (opts.applyMirror == 1){
         PPMImage *outputImage = mirrorImage(inputPic);
+        write_ppmfile(outputImage, *opts.output);
+    }else if (opts.thumbnailScale >= 1){
+        PPMImage *outputImage = createThumbnail(inputPic, opts.thumbnailScale);
+        write_ppmfile(outputImage, *opts.output);
+    }else if (opts.tileScale >= 1){
+        PPMImage *outputImage = tileImages(inputPic, opts.tileScale);
+        write_ppmfile(outputImage, *opts.output);
+    }else if (opts.isolateColor >= 1){
+        PPMImage *outputImage = isolateColor(inputPic, opts.isolateColor);
+        write_ppmfile(outputImage, *opts.output);
+    }else if (opts.removeColor >= 1){
+        PPMImage *outputImage = removeColor(inputPic, opts.removeColor);
         write_ppmfile(outputImage, *opts.output);
     }
 
@@ -245,7 +261,7 @@ PPMImage * applypSepiaTransformation (PPMImage *image){
     return ppm;
 }
 
-PPMImage * mirrorImage (PPMImage * image){
+PPMImage * mirrorImage (PPMImage *image){
     unsigned int height = image->height;
     unsigned int width = image->width;
     unsigned int max = image->max;
@@ -265,19 +281,81 @@ PPMImage * mirrorImage (PPMImage * image){
     return ppm;
 }
 
-// PPMImage createThumbnail (PPMImage image){
-    
-// }
+PPMImage * isolateColor (PPMImage *image, int isolateColor){
+    isolateColor = isolateColor - 1;
+    for (int h = 0; h < image->height; h++){
+        for (int w = 0; w < image->width; w++){
+            if (isolateColor == 0){
+                image->pixmap[1][h][w] = 0;
+                image->pixmap[2][h][w] = 0;
+            }else if (isolateColor == 1){
+                image->pixmap[0][h][w] = 0;
+                image->pixmap[2][h][w] = 0;
+            }
+            else if (isolateColor == 2){
+                image->pixmap[0][h][w] = 0;
+                image->pixmap[1][h][w] = 0;
+            }
+        }
+    }
+    return image;
+}
 
-// PPMImage tileImages (PPMImage image){       // what does this mean? like if n=2 and original is 100*100, then out is 50*100
+PPMImage * removeColor (PPMImage *image, int removeColor){
+    removeColor = removeColor - 1;
+    for (int h = 0; h < image->height; h++){
+        for (int w = 0; w < image->width; w++){
+            image->pixmap[removeColor][h][w] = 0;
+        }
+    }
+    return image;
+}
 
-// }
+PPMImage * createThumbnail (PPMImage *image, int thumbnailScale){
+    unsigned int height = (unsigned int) (image->height)/thumbnailScale;
+    unsigned int width = (unsigned int) (image->width)/thumbnailScale;
+    unsigned int max = image->max;
+    PPMImage *ppm = new_ppmimage(width, height, max);
+    for (int h = 0; h < height; h++){
+        for (int w = 0; w < width ; w++){
+            ppm->pixmap[0][h][w] = image->pixmap[0][h * thumbnailScale][w * thumbnailScale];
+            ppm->pixmap[1][h][w] = image->pixmap[1][h * thumbnailScale][w * thumbnailScale];
+            ppm->pixmap[2][h][w] = image->pixmap[2][h * thumbnailScale][w * thumbnailScale];
+        }
+    }
+    return ppm;
+}
+
+PPMImage * tileImages (PPMImage *image, int tileScale){       
+    PPMImage *thumbnail = createThumbnail(image, (int) tileScale);
+    unsigned int height = image->height;
+    unsigned int width = image->width;
+    unsigned int max = image->max;
+    PPMImage *ppm = new_ppmimage(width, height, max);
+    int thumbHeight = 0;
+    int thumbWidth = 0;
+    for (int h = 0; h < height; h++){
+        if (thumbHeight == thumbnail->height)
+            thumbHeight = 0;
+        for (int w = 0; w < width ; w++){
+            if (thumbWidth == thumbnail->width)
+                thumbWidth = 0;
+            ppm->pixmap[0][h][w] = thumbnail->pixmap[0][thumbHeight][thumbWidth];
+            ppm->pixmap[1][h][w] = thumbnail->pixmap[1][thumbHeight][thumbWidth];
+            ppm->pixmap[2][h][w] = thumbnail->pixmap[2][thumbHeight][thumbWidth];
+            thumbWidth++;
+        }
+        thumbWidth = 0;
+        thumbHeight++;
+    }
+    return ppm;
+}
 
 PPMImage *new_ppmimage(unsigned int width, unsigned int height, unsigned int max){
     PPMImage *ppm;
     ppm = malloc(sizeof(PPMImage));
 
-    for (int i = 0; i <= 3; i++){
+    for (int i = 0; i < 3; i++){
         ppm->pixmap[i] = malloc(height * sizeof(unsigned int *));
         for (unsigned int h=0; h<height; h++)
             ppm->pixmap[i][h] = malloc(width * sizeof(unsigned int));
