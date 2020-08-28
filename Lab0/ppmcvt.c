@@ -252,12 +252,6 @@ PPMImage * applypSepiaTransformation (PPMImage *image){
             ppm->pixmap[2][h][w] = newB;
         }
     }
-
-    // for (int h = 300; h < 500; h++){
-    //     for (int w = 900; w < 1000; w++){
-    //         printf("h: %d, w: %d, r: %d, g: %d, b: %d\n", h, w, ppm->pixmap[0][h][w], ppm->pixmap[1][h][w], ppm->pixmap[2][h][w]);
-    //     }
-    // }
     return ppm;
 }
 
@@ -314,10 +308,17 @@ PPMImage * removeColor (PPMImage *image, int removeColor){
 PPMImage * createThumbnail (PPMImage *image, int thumbnailScale){
     unsigned int height = (unsigned int) (image->height)/thumbnailScale;
     unsigned int width = (unsigned int) (image->width)/thumbnailScale;
+    if ((image->width%thumbnailScale) != 0){
+        width++;
+    }
+    if ((image->height%thumbnailScale) != 0){
+        height++;
+    }
     unsigned int max = image->max;
     PPMImage *ppm = new_ppmimage(width, height, max);
     for (int h = 0; h < height; h++){
         for (int w = 0; w < width ; w++){
+            //printf("H: %d, W: %d", h * thumbnailScale, w * thumbnailScale);
             ppm->pixmap[0][h][w] = image->pixmap[0][h * thumbnailScale][w * thumbnailScale];
             ppm->pixmap[1][h][w] = image->pixmap[1][h * thumbnailScale][w * thumbnailScale];
             ppm->pixmap[2][h][w] = image->pixmap[2][h * thumbnailScale][w * thumbnailScale];

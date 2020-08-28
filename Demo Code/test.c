@@ -35,7 +35,7 @@ int main(int argc, char *argv[]){
     //     printf("\n");
     // }
 
-    printf("%d", (int) 4.5);
+    printf("%d", (int) 10%3);
 
 
 }
