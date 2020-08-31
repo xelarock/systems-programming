@@ -151,6 +151,7 @@ Options parseArgs(int argc, char *argv[]){
                 moreThanOneTrans+=1;                            // if opts.removeColor != 0, then option is ON
                 break;
             case 's':                                           // turns on the sepia transformation
+                printf("SEPIA");
                 checkMultipleTransformations(moreThanOneTrans);
                 opts.applySepia = 1;
                 moreThanOneTrans+=1;
@@ -180,23 +181,31 @@ Options parseArgs(int argc, char *argv[]){
                 break;
             case 'o':                                           // saves the output file location to options
                 opts.output = optarg;
-                containsOutput = 1;
+                printf("Output!: %s\n", opts.output);
+                containsOutput++;
                 break;
             default:                                            // if unallowed option, show usage
                 fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
                 exit(1);
                 break;
             }
-        }else{                                                  // parses non-options args, aka input file location
-            if (containsInput > 0){                             // if more than one input has been specified, show usage
-                fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
-                exit(1);
+        }else //(optind < argc){                                                 // parses non-options args, aka input file location
+            // if (containsInput > 0){                             // if more than one input has been specified, show usage
+            //     fprintf(stderr, "Usage: ppmcvt [-bgirsmtno] [FILE]\n");
+            //for (; optind < argc; optind++){
+            if (containsInput == 0){                             // if more than one input has been specified, show usage
+                printf("hello!!!!!!!!!1");
+                opts.input = argv[optind];                          // set input file location and move to the next argument to 
+                printf("%s\n", opts.input);
+                containsInput = 1;
             }
-            opts.input = argv[optind];                          // set input file location and move to the next argument to 
-            optind ++;                                          // parse. Indicate that input file has been given.
-            containsInput = 1;  
-        }
-    }
+            //}
+            optind++;
+        }    //     exit(1);
+    //}
+    
+        //}
+    //}
 
     if (containsOutput == 0){                                   // check if output file given
         fprintf(stderr, "Error: No output file specified\n");
