@@ -50,7 +50,7 @@ int main(int argc, char *argv[]){
 
 void *my_malloc(size_t size){
     printf("heap_end: %p\n", sbrk(0));
-    int *chunk_start = sbrk(0);
+    void *chunk_start = sbrk(0);
     size += CHUNKHEADERSIZE;                                        // add header size
     if (size < 16){                                                 // if less than 16, set to 16
         size = 16;
@@ -62,11 +62,13 @@ void *my_malloc(size_t size){
         printf("teting");
         if (size < 8192) {
             sbrk(8192);
-            *chunk_start = (int) size;
-            *(chunk_start + 4) = 8888;
+            *((int32_t *)chunk_start) = size;
+            *((int32_t *)chunk_start + sizeof(int32_t)) = 8888;
             printf("new heap_end: %p\nold end: %p\nstart malloc: %p\n",
-                   sbrk(0), chunk_start, (chunk_start + CHUNKHEADERSIZE/sizeof(int)));
-            printf("size: %d, magic#: %d\n", *chunk_start, *(chunk_start+4));
+                   sbrk(0), chunk_start, (chunk_start + CHUNKHEADERSIZE));
+            printf("size: %p, magic#: %p\n", chunk_start, (chunk_start+sizeof(int32_t)));
+            printf("size: %d, magic#: %d\n", *((int32_t *)chunk_start),
+                   *((int32_t *)chunk_start+sizeof(int32_t)));
             if (8192 - size >= 16){
                 FreeListNode node;
                 node = (FreeListNode) (chunk_start + size/sizeof(int));
@@ -76,11 +78,13 @@ void *my_malloc(size_t size){
             }
         }else{
             sbrk(size);
-            *chunk_start = size;
-            *(chunk_start + 4) = 8888;
+            *((int32_t *)chunk_start) = size;
+            *((int32_t *)chunk_start + sizeof(int32_t)) = 8888;
             printf("new heap_end: %p\nold end: %p\nstart malloc: %p\n",
-                   sbrk(0), chunk_start, chunk_start + CHUNKHEADERSIZE);
-            printf("size: %d, magic#: %d", *chunk_start, *(chunk_start+4));
+                   sbrk(0), chunk_start, (chunk_start + CHUNKHEADERSIZE));
+            printf("size: %p, magic#: %p\n", chunk_start, (chunk_start+sizeof(int32_t)));
+            printf("size: %d, magic#: %d\n", *((int32_t *)chunk_start),
+                   *((int32_t *)chunk_start+sizeof(int32_t)));
         }
     }else {
         printf("HHHHHHHHHH\n");
