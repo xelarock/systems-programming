@@ -11,5 +11,5 @@
 
 int main(int argc, char *argv[]){
     printf("out: %d\n", 17%8);
-    printf("out: %d\n", 17 + 8-17%8);
+    printf("out: %d\n", 2 == 1);
 }
