@@ -1,5 +1,5 @@
 //
-// Created by Alex Welsh on 9/14/20.
+// Created by Alex Welsh on 9/17/20.
 //
 
 #include "my_malloc.h"
@@ -15,174 +15,238 @@ FreeListNode remove_node(unsigned sz);
 FreeListNode find_node(unsigned sz);
 void coalesce();
 void print_list();
+int min_chunk_size();
 
 int main(int argc, char *argv[]){
-    printf("malloc size 16\n");
     int *ptr = my_malloc(16);
-//    printf("pointer Loc: %d", *ptr);
     print_list();
-
-    printf("malloc size 1\n");
-    ptr = my_malloc(1);
-
-    printf("malloc size 7\n");
-    ptr = my_malloc(7);
-
-    printf("malloc size 8\n");
-    ptr = my_malloc(8);
-
-    printf("malloc size 9\n");
-    ptr = my_malloc(9);
-
-    printf("malloc size 17\n");
-    ptr = my_malloc(17);
-
-    printf("malloc size 23\n");
-    ptr = my_malloc(23);
-
-    printf("malloc size 24\n");
-    ptr = my_malloc(24);
-
-    printf("malloc size 25\n");
-    ptr = my_malloc(25);
+    printf("+++++++++++++++++++\n");
+    int *ptr2 = my_malloc(1);
     print_list();
+    printf("+++++++++++++++++++\n");
+    my_free(ptr2);
+    print_list();
+    printf("+++++++++++++++++++\n");
+    int *ptr3 = my_malloc(7);
+    printf("head: %p, %p", head, head->flink);
+    print_list();
+    my_free(ptr3);
+    print_list();
+    printf("+++++++++++++++++++\n");
 }
 
 void *my_malloc(size_t size){
-    printf("heap_end: %p\n", sbrk(0));
     void *chunk_start = sbrk(0);
+    void *chunk_end = sbrk(0);
+    void *malloc_start = sbrk(0);
+    int total_chunk_size;
     size += CHUNKHEADERSIZE;                                        // add header size
-    if (size < 16){                                                 // if less than 16, set to 16
-        size = 16;
+
+    if (size < min_chunk_size()){                                   // if less than 16, set to 16
+        size = min_chunk_size();
     } else if (size%8 != 0){                                        // if greater than 16, round up to
         size += 8-size%8;                                           // multiple of 8.
     }
+
     printf("needed size: %zu\n", size);
-    if (free_list_begin() == NULL){
-        printf("teting");
-        if (size < 8192) {
-            sbrk(8192);
-            *((int32_t *)chunk_start) = size;
-            *((int32_t *)chunk_start + sizeof(int32_t)) = 8888;
-            printf("new heap_end: %p\nold end: %p\nstart malloc: %p\n",
-                   sbrk(0), chunk_start, (chunk_start + CHUNKHEADERSIZE));
-            printf("size: %p, magic#: %p\n", chunk_start, (chunk_start+sizeof(int32_t)));
-            printf("size: %d, magic#: %d\n", *((int32_t *)chunk_start),
-                   *((int32_t *)chunk_start+sizeof(int32_t)));
-            if (8192 - size >= 16){
-                FreeListNode node;
-                node = (FreeListNode) (chunk_start + size/sizeof(int));
-                node->size = 8192 - size;
-                node->flink = NULL;
-                insert_node(node);
-            }
-        }else{
+    if (find_node(size) != NULL){
+        FreeListNode removed_node = remove_node(size);
+        printf("helloooo %p\n", head);
+        total_chunk_size = removed_node->size;
+        printf("loc: %p", removed_node);
+        chunk_start = &(*removed_node);
+        printf("chunk start %p\n", chunk_start);
+        if (head != NULL){
+            printf("final head: %p, %p\n", head, head->flink);
+        }
+        *((int32_t *)chunk_start) = size;
+        if (head != NULL){
+            printf("final head11: %p, %p\n", head, head->flink);
+        }
+        *((int32_t *)(chunk_start + sizeof(int32_t))) = 8888;
+        if (head != NULL){
+            printf("final head1: %p, %p\n", head, head->flink);
+        }
+        chunk_end = chunk_start + size;
+        malloc_start = chunk_start + CHUNKHEADERSIZE;
+
+    } else {
+        if (size > 8192) {
+            total_chunk_size = size;
             sbrk(size);
-            *((int32_t *)chunk_start) = size;
-            *((int32_t *)chunk_start + sizeof(int32_t)) = 8888;
-            printf("new heap_end: %p\nold end: %p\nstart malloc: %p\n",
-                   sbrk(0), chunk_start, (chunk_start + CHUNKHEADERSIZE));
-            printf("size: %p, magic#: %p\n", chunk_start, (chunk_start+sizeof(int32_t)));
-            printf("size: %d, magic#: %d\n", *((int32_t *)chunk_start),
-                   *((int32_t *)chunk_start+sizeof(int32_t)));
+        }else{
+            sbrk(8192);
+            total_chunk_size = 8192;
         }
-    }else {
-        printf("HHHHHHHHHH\n");
-        FreeListNode node = find_node(size);
-        if (node == NULL){
-            printf("NULL!");
-        }
-        printf("node add: %p, node size: %zu", node, node->size);
+        *((int32_t *)chunk_start) = size;
+        *((int32_t *)chunk_start + sizeof(int32_t)) = 8888;
+        chunk_end = chunk_start + size;
+        malloc_start = chunk_start + CHUNKHEADERSIZE;
     }
-    printf("++++++++++++++++++++++++++++++++++++\n");
-    return chunk_start + CHUNKHEADERSIZE;
-}
-
-void my_free(void *ptr){
-//    FreeListNode n;
-
-//    n = (FreeListNode) ptr;
-//    n->size = *ptr
-}
-
-FreeListNode free_list_begin(void){
-    if (head == NULL)
-        return NULL;
-    else
-        return head;
+    printf("HELLO!\n");
+    if (head != NULL){
+        printf("final head: %p, %p\n", head, head->flink);
+    }
+    if (total_chunk_size - size > min_chunk_size()){
+        printf("HELLO IN!\n");
+        FreeListNode split_node = NULL;
+        split_node = (FreeListNode) (chunk_end);
+        split_node->size = total_chunk_size - size;
+        split_node->flink = NULL;
+        insert_node(split_node);
+    }
+    if (head != NULL){
+        printf("final head: %p, %p\n", head, head->flink);
+    }
+    return malloc_start;
 }
 
 void print_list(){
-    FreeListNode curr_node = head;
-//    printf("node list --> %p", head);
-    while(curr_node != NULL){
-        printf("%p --> ", curr_node);
-        curr_node = curr_node->flink;
+    FreeListNode temp = head;
+    while(temp != NULL){
+        printf("%p --> ", temp);
+        temp = temp->flink;
     }
-    printf("NULL\n");
+    printf("%p\n", temp);
+}
+
+int min_chunk_size(){
+    if (sizeof(FreeListNode)>16){
+        return sizeof(FreeListNode);
+    }else {
+        return 16;
+    }
+}
+
+void my_free(void *ptr){
+    printf("FREEING NODE******\n");
+    FreeListNode n;
+
+    n = (FreeListNode) (ptr - CHUNKHEADERSIZE);
+//    printf("free node size %p, %d\n", n, *((int32_t *)(ptr - CHUNKHEADERSIZE)));
+    n->size = *((int32_t *)(ptr - CHUNKHEADERSIZE));
+    n->flink = NULL;
+    insert_node(n);
 }
 
 void insert_node(FreeListNode node){
-    printf("new node size: %zu\n", node->size);
-    if (head == NULL){
-        printf("head is null\n");
+    FreeListNode curr_node = head;
+    printf("node: %p, head: %p, curr_node: %p\n", node, head, curr_node);
+    if (head != NULL)
+        printf("%p, %d\n", head->flink, (head->flink != NULL));
+    if (head == NULL ){                                                 // head is null
+        printf("head is NULL\n");
         head = node;
-        head->flink = NULL;
-    }else{
-        FreeListNode curr_node = head;
-        while(curr_node->flink != NULL){
-            if (node < head){
-                node->flink = head;
-                head->flink = node;
-            } else if (node < curr_node->flink && node > curr_node) {
-                node->flink = curr_node->flink;
-                curr_node->flink = node;
-            }
+//        printf("head: %p, head.flink: %p\n", head, head->flink);
+    }else if (head >= node) {                                           // insert before head
+        printf("insert before head\n");
+        curr_node = head;
+        node->flink = curr_node;
+        head = node;
+        printf("node: %p, head: %p, curr_node: %p\n", head, head->flink, head->flink->flink);
+    }else if (head->flink == NULL && head < node){                      // insert after head, and head->flink is null
+        printf("insert after head, and head->flink is null\n");
+        node->flink = NULL;
+        head->flink = node;
+    }else if ((head->flink != NULL) && (head->flink >= node)){          // insert after head, and head->flink is !null
+        printf("insert after head, and head->flink is !null\n");
+        node->flink = head->flink;
+        head->flink = node;
+    }else{                                                              // all other cases
+        printf("LAST RESORT\n");
+        curr_node = head->flink;
+        while(curr_node->flink != NULL && curr_node->flink < node){
+            curr_node = curr_node->flink;
         }
-        if (curr_node->flink == NULL) {
-            printf("should go here\n");
-            curr_node->flink = node;
-            node->flink = NULL;
-        }
+        node->flink = curr_node->flink;
+        curr_node->flink = node;
     }
 }
 
 FreeListNode remove_node(unsigned sz){
-    FreeListNode node = head;
-    printf("size %u\n", sz);
-    while (node->flink != NULL){
-        if (node->size <= sz)
-            return node;
-        else
-            node = node->flink;
+    printf("REMOVING NODE\n");
+    FreeListNode curr_node = head;
+    print_list();
+    printf("head size %p, %p\n", head, head->flink);
+    if (head->flink != NULL){
+        printf("kkep going: %p\n", head->flink->flink);
     }
-    return NULL;
+    if (head == NULL){
+        return NULL;
+    }else if (head->size >= sz){                        // if head is big enough
+        printf("if head is big enough %p, %p \n", head, head->flink);
+        curr_node = head;
+        if (head->flink != NULL){
+            printf("not null %p, %p\n", head, head->flink);
+            if (head->flink->flink == NULL){
+                printf("not null %p, %p, %p\n", head, head->flink, head->flink->flink);
+            }
+        }
+        head = head->flink;
+        printf("if head is big enough!!, %p\n", head);
+        if (head != NULL && head->flink == NULL){
+            printf("not null %p, %p\n", head, head->flink);
+        }
+        return curr_node;
+    }else if (head->flink->size >= sz) {                // if head->flink is big enough
+        printf("if head->flink is big enough\n");
+        curr_node = head->flink;
+        head->flink = head->flink->flink;
+        printf("if head->flink is big enough!! %p help\n", head);
+        return curr_node;
+    }else{
+        printf("REMOVING NOT HEAD\n");
+        FreeListNode temp = NULL;
+        curr_node = head->flink;
+        while(curr_node->flink != NULL && curr_node->flink->size < sz){
+            curr_node = curr_node->flink;
+        }
+        printf("curr node: %p\n", curr_node);
+        if (curr_node->flink == NULL || curr_node->flink->size < sz){
+            return NULL;
+        }
+        temp = curr_node->flink;
+        curr_node->flink = temp->flink;
+        return temp;
+    }
 }
 
 FreeListNode find_node(unsigned sz){
-    FreeListNode node = head;
-    printf("size %u\n", sz);
-    printf("true?: %d\n", head->flink == NULL);
-    if (head->flink == NULL){
-        if (head->size >= sz) {
-            printf("what\n");
-            return head;
+    printf("FINDING NODE\n");
+    FreeListNode curr_node = head;
+    if (head == NULL){
+        return NULL;
+    }else if (head->size >= sz){                        // if head is big enough
+        printf("if head is big enough\n");
+        curr_node = head;
+//        head = head->flink;
+        return curr_node;
+    }else if (head->flink->size >= sz) {                // if head->flink is big enough
+        printf("if head->flink is big enough\n");
+        curr_node = head->flink;
+//        head->flink = head->flink->flink;
+        return curr_node;
+    }else{
+        printf("FINDING NOT HEAD\n");
+        FreeListNode temp = NULL;
+        curr_node = head->flink;
+        while(curr_node->flink != NULL && curr_node->flink->size < sz){
+            curr_node = curr_node->flink;
         }
-    }else {
-        while (node->flink != NULL) {
-            printf("wile\n");
-            if (node->size >= sz) {
-                printf("what\n");
-                return node;
-            } else
-                node = node->flink;
+        printf("curr node: %p\n", curr_node);
+        if (curr_node->flink == NULL || curr_node->flink->size < sz){
+            return NULL;
         }
+        temp = curr_node->flink;
+//        curr_node->flink = temp->flink;
+        return temp;
     }
-    return NULL;
 }
 
-void coalesce(){
-
+FreeListNode free_list_begin(void){
+    return head;
 }
 
+void coalesce_free_list(void){
 
+}
