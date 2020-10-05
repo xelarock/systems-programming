@@ -15,7 +15,7 @@ typedef struct {                // defines the options structure to hold the opt
 }Options;
 
 Options parseArgs(int argc, char *argv[]);                          // method declarations
-void checkMultipleTransformations (int numTrans);
+void checkModes (int numTrans);
 PBMImage * convertToBitmap (PPMImage *image);
 PGMImage * convertToGreyscale (PPMImage *ppm, long greyScaleMax);
 PPMImage * applypSepiaTransformation (PPMImage *image);
@@ -222,7 +222,7 @@ Options parseArgs(int argc, char *argv[]){
 }
 
 // checks if mutliple transformations have been specified. If the count is more than one, print error and quit
-void checkMultipleTransformations (int numTrans){
+void checkModes (int numTrans){
     if (numTrans > 0){
         fprintf(stderr, "Error: Multiple transformations specified\n");
         exit(1);

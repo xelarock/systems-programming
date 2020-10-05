@@ -4,7 +4,8 @@
 void print_chararray( char *c, unsigned long len ){
     printf("Array address: %p; len: %lu; sizeof(c):%lu\n", c, len, sizeof(c) );
     
-    for( int i=0; i<len; i++){
+    for( int i=0; i<=len; i++){
+        printf("%d\n", i);
         printf("\tarray[%2d]: '%c' (%d)\n", i, c[i], c[i]);
     }
     printf("\n");
