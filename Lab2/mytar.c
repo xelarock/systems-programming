@@ -17,102 +17,144 @@ typedef struct {                // defines the options structure to hold the opt
 
 Options parseArgs(int argc, char *argv[]);
 void checkModes (int numTrans);
-void createArchive(Options opts);
+void createArchive(FILE *archiveFile, char *inputDirectoryString);
+void printContents(char *archiveFileString);
+//char ** Map=NULL;
 
 int main(int argc, char *argv[]) {
     Options opts = parseArgs(argc, argv);
 
     if (opts.createArchive == 1){
-        createArchive(opts);
+        FILE *archiveFile = fopen(opts.archiveFile,"w+");
+        int32_t magic_number = 0x7261746D;
+        fwrite(&magic_number, 4, 1, archiveFile);
+//        DIR *input_directory = opendir(opts.inputDirectory);
+
+        struct stat file_stat;
+        lstat(opts.inputDirectory, &file_stat);
+        fwrite(&file_stat.st_ino, 8, 1, archiveFile);                   // inode #
+        int32_t file_name_length = strlen(opts.inputDirectory) + 1;
+        fwrite(&file_name_length, 4, 1, archiveFile);                   // name length
+        fwrite(opts.inputDirectory, file_name_length, 1, archiveFile);                  // name
+        fwrite(&file_stat.st_mode, 4, 1, archiveFile);                      // mode
+        fwrite(&file_stat.st_mtimespec.tv_sec, 8, 1, archiveFile);          // modification time
+        printf("end of dir1 \n");
+        createArchive(archiveFile, opts.inputDirectory);
+        fclose(archiveFile);
+    }
+    if (opts.printContents == 1){
+        printContents(opts.archiveFile);
     }
 
     return 0;
 }
 
-void createArchive(Options opts){
-    char buffer[100];
-    int32_t magic2;
+void printContents(char *archiveFileString){
+    FILE *archiveFile = fopen(archiveFileString,"r");
+    int32_t magic_number;
+    char *fullname = (char *)malloc(sizeof(char)*258);
+
+    fread(&magic_number, 4, 1, archiveFile);
+    printf("hex: %x\n", magic_number);
+
+    while(feof(archiveFile) != 1){
+        printf("+++++++++++++++++++++++\n");
+        ino64_t inode_num = 0;
+        fread(&inode_num, 8, 1, archiveFile);
+        printf("inode: %llu\n", inode_num);
+
+        int32_t file_name_length;
+        fread(&file_name_length, 4, 1, archiveFile);
+        printf("name length: %d\n", file_name_length);
+
+        char *file_name = (char *) malloc(file_name_length * sizeof(char));
+        fread(file_name, file_name_length, 1, archiveFile);
+        printf("name : %s\n", file_name);
+        free(file_name);
+
+        mode_t read_mode;
+        fread(&read_mode, 4, 1, archiveFile);
+        if (!feof(archiveFile))                                             // if the last file in archive is hard link
+            fseek(archiveFile, -4, SEEK_CUR);                               // don't rewind 4 bytes after reading mode
+                                                                            // prevents infinite loop
+        if(S_ISDIR(read_mode) || S_ISREG(read_mode)){
+            fread(&read_mode, 4, 1, archiveFile);
+            printf("not a hard link! mode is: %us\n", read_mode);
+
+            time_t read_mtime;
+            fread(&read_mtime, 8, 1, archiveFile);
+            printf("mtime : %ld\n", read_mtime);
+
+            if (S_ISDIR(read_mode)){
+                printf("DIRECTORY\n");
+            }else {
+                off_t read_size;
+                fread(&read_size, 8, 1, archiveFile);
+                printf("size : %llu\n", read_size);
+
+                char *read_contents = malloc(read_size);
+                fread(read_contents, read_size, 1, archiveFile);
+                printf("read contents: %s\n", read_contents);
+
+            }
+
+        }
+    }
+}
+
+void createArchive(FILE *archiveFile, char *inputDirectoryString){
     struct dirent *de;
     struct stat file_stat;
     char * fullname;
-    int fd;
 
-    FILE *archiveFile = fopen(opts.archiveFile,"w+");
-    int32_t magic_number = 0x7261746D;
-    fwrite(&magic_number, 4, 1, archiveFile);
-//    fclose(archiveFile);
+    fseek(archiveFile, 0, SEEK_END);
+    printf("end1 %lu\n", ftell(archiveFile));
 
-//    archiveFile = fopen(opts.archiveFile, "r");
-    fseek(archiveFile, -4, SEEK_CUR);
-    fread(buffer, 4, 1, archiveFile);
-    printf("hex: %x\n", *((int32_t *) buffer));
+    DIR *input_directory = opendir(inputDirectoryString);
 
-    DIR *input_directory = opendir(opts.inputDirectory);
-    fullname = (char *)malloc(sizeof(char)*(strlen(opts.inputDirectory)+258));
+    printf("inputDir: %s\n", inputDirectoryString);
+    fullname = (char *)malloc((strlen(inputDirectoryString)+258));
     for (de = readdir(input_directory); de != NULL; de = readdir(input_directory)) {
-//        printf("cmp: %d %d\n", strcmp(de->d_name, "."), strcmp(de->d_name, ".."));
-        if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0){
-            printf("++++++++++++++++++++++\n");
-            printf("%s\n", de->d_name);
-            sprintf(fullname, "%s/%s", opts.inputDirectory, de->d_name);
-            stat(fullname, &file_stat);
-
+        sprintf(fullname, "%s/%s", inputDirectoryString, de->d_name);
+        lstat(fullname, &file_stat);
+        if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0 && !S_ISLNK(file_stat.st_mode)){
+            printf("%s path: %s %llu, %lu\n", de->d_name, fullname, file_stat.st_ino, ftell(archiveFile));
             fwrite(&file_stat.st_ino, 8, 1, archiveFile);                   // inode #
-            ino64_t inode_num = 0;
-            fseek(archiveFile, -8, SEEK_CUR);
-            fread(&inode_num, 8, 1, archiveFile);
-            printf("inode: %llu, read_inode: %llu\n", file_stat.st_ino, inode_num);
 
-            int32_t file_name_length = strlen(de->d_name) + 1;
+            int32_t file_name_length = strlen(fullname) + 1;
             fwrite(&file_name_length, 4, 1, archiveFile);                   // name length
-            file_name_length = 0;
-            fseek(archiveFile, -4, SEEK_CUR);
-            fread(&file_name_length, 4, 1, archiveFile);
-            printf("name length: %lu, read length: %d\n", strlen(de->d_name) + 1, file_name_length);
+            fwrite(fullname, file_name_length, 1, archiveFile);                  // name
 
-            fwrite(&(de->d_name), file_name_length, 1, archiveFile);                   // name
-            char *file_name;
-            fseek(archiveFile, 0-file_name_length, SEEK_CUR);
-            fread(file_name, file_name_length, 1, archiveFile);
-            printf("name : %s, read name: %s\n", de->d_name, file_name);
+            if(!get_inode( file_stat.st_ino )) {            //inode not yet seen; add to list and process
+                set_inode(file_stat.st_ino, fullname);
+                printf("%s path: %s\n", de->d_name, fullname);
+                // at this point in the future, check if file is a hard link, if so, break here
 
-            // at this point in the future, check if file is a hard link, if so, break here
+                fwrite(&file_stat.st_mode, 4, 1, archiveFile);                      // mode
+                fwrite(&file_stat.st_mtimespec.tv_sec, 8, 1, archiveFile);          // modification time
 
-            fwrite(&file_stat.st_mode, 4, 1, archiveFile);                   // mode
-            mode_t read_mode;
-            fseek(archiveFile, -4, SEEK_CUR);
-            fread(&read_mode, 4, 1, archiveFile);
-            printf("mode : %us, read mode: %us\n", file_stat.st_mode, read_mode);
+                if (S_ISDIR(file_stat.st_mode)){
+                    printf("DIRECTORY\n");
+                }else {
+                    fwrite(&file_stat.st_size, 8, 1, archiveFile);             // size
 
-            fwrite(&file_stat.st_mtimespec.tv_sec, 8, 1, archiveFile);             // modification time
-            time_t read_mtime;
-            fseek(archiveFile, -8, SEEK_CUR);
-            fread(&read_mtime, 8, 1, archiveFile);
-            printf("mtime : %ld, read mtime: %ld\n", file_stat.st_mtimespec.tv_sec, read_mtime);
+                    FILE *inputFile = fopen(fullname,"r");
+                    char *read_contents = malloc(file_stat.st_size);
+                    fread(read_contents, file_stat.st_size, 1, inputFile);
 
-            if (S_ISDIR(file_stat.st_mode)){
-                printf("DIRECTORY\n");
-            }else {
-                fwrite(&file_stat.st_size, 8, 1, archiveFile);             // size
-                off_t read_size;
-                fseek(archiveFile, -8, SEEK_CUR);
-                fread(&read_size, 8, 1, archiveFile);
-                printf("size : %llu, read size: %llu\n", file_stat.st_size, read_size);
-
-                fwrite(&file_stat, read_size, 1, archiveFile);             // content
-                off_t read_size;
-                fseek(archiveFile, -8, SEEK_CUR);
-                fread(&read_size, 8, 1, archiveFile);
-                printf("size : %llu, read size: %llu\n", file_stat.st_size, read_size);
+                    fwrite(read_contents, file_stat.st_size, 1, archiveFile);             // content
+                }
             }
         }
+        printf("end2 %lu,\n", ftell(archiveFile));
+
+        if (S_ISDIR(file_stat.st_mode) && strcmp(de->d_name, ".") !=0 && strcmp(de->d_name, "..") !=0 ) {
+            createArchive(archiveFile, fullname);
+            fseek(archiveFile, 0, SEEK_END);
+            printf("end of inner loop %lu\n", ftell(archiveFile));
+        }
     }
-    fclose(archiveFile);
-
-    for (de = readdir(input_directory); de != NULL; de = readdir(input_directory)) {
-
-    }
-
+    printf("end3 %lu,\n", ftell(archiveFile));
 }
 
 void read_tar(char * dirname){
@@ -169,14 +211,14 @@ Options parseArgs(int argc, char *argv[]){
         fprintf(stderr, "Error: No mode specified.\n");
         exit(-1);
     }
-    if (opts.yesInputDirectory != 1){
-        fprintf(stderr, "Error: No directory target specified.\n");
-        exit(-1);
-    }
-    if (opts.yesArchiveFile != 1){
-        fprintf(stderr, "Error: No tarfile specified.\n");
-        exit(-1);
-    }
+//    if (opts.yesInputDirectory != 1){
+//        fprintf(stderr, "Error: No directory target specified.\n");
+//        exit(-1);
+//    }
+//    if (opts.yesArchiveFile != 1){
+//        fprintf(stderr, "Error: No tarfile specified.\n");
+//        exit(-1);
+//    }
 //    if (!opts.createArchive && opts.yesInputDirectory){
 //        fprintf(stderr, "Error: Multiple modes specified.\n");
 //        exit(1);

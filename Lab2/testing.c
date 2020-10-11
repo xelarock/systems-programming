@@ -2,12 +2,12 @@
 // Created by Alex Welsh on 9/14/20.
 //
 
-#include "my_malloc.h"
-#include <stdlib.h>
 #include <stdio.h>
+#include <getopt.h>
 #include <string.h>
-#include <stddef.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 struct foo{
     char c;
@@ -27,8 +27,13 @@ int main(int argc, char *argv[]){
 //
 //    printf("%c, %d\n", f->c, f->i);
 
-    int *i;
-    printf("%p, %p\n", i, (void *)i+2);
-    short *j;
-    printf("%p, %p\n", j, j+2);
+    char buf[4];
+
+    FILE *file1 = fopen("dir1/file1.txt", "r");
+    printf("loc: %lu\n", ftell(file1));
+    fseek(file1, 0, SEEK_END);
+    printf("loc2: %lu\n", ftell(file1));
+    fseek(file1, 4, SEEK_SET);
+    fread(&buf, 4, 1, file1);
+    printf("loc2: %lu, %c\n", ftell(file1), buf[0]);
 }
