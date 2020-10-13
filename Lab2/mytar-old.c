@@ -32,15 +32,12 @@ int main(int argc, char *argv[]) {
 
         struct stat file_stat;
         lstat(opts.inputDirectory, &file_stat);
-        int64_t inode_num = (int64_t) file_stat.st_ino;
-        fwrite(&inode_num , 8, 1, archiveFile);                   // inode #
-        int32_t file_name_length = strlen(opts.inputDirectory);
+        fwrite(&file_stat.st_ino, 8, 1, archiveFile);                   // inode #
+        int32_t file_name_length = strlen(opts.inputDirectory) + 1;
         fwrite(&file_name_length, 4, 1, archiveFile);                   // name length
         fwrite(opts.inputDirectory, file_name_length, 1, archiveFile);                  // name
-        int32_t mode = (int32_t) file_stat.st_mode;
-        fwrite(&mode, 4, 1, archiveFile);                      // mode
-        int64_t time_num = (int64_t) file_stat.st_mtimespec.tv_sec;
-        fwrite(&time_num, 8, 1, archiveFile);          // modification time
+        fwrite(&file_stat.st_mode, 4, 1, archiveFile);                      // mode
+        fwrite(&file_stat.st_mtimespec.tv_sec, 8, 1, archiveFile);          // modification time
         printf("end of dir1 \n");
         createArchive(archiveFile, opts.inputDirectory);
         fclose(archiveFile);
@@ -75,51 +72,38 @@ void printContents(char *archiveFileString){
 
         char *file_name = (char *) malloc(file_name_length * sizeof(char));
         fread(file_name, file_name_length, 1, archiveFile);
-        file_name[file_name_length] = '\0';
-        printf("name : %s, %p, %d\n", file_name, file_name, file_name_length);
+        printf("name : %s\n", file_name);
+
 //        char *name = (char *) malloc(file_name_length * sizeof(char));
 //        strcpy(name, file_name);
 
         mode_t read_mode;
-        int32_t read_mode_int;
-
-        printf("&read_mode: %p, %lu\n", &read_mode, sizeof(read_mode));
-        if (fread(&read_mode_int, 4, 1, archiveFile) == -1)
-            perror("fread");
-        read_mode = (mode_t) read_mode_int;
+//        printf("name3 : %s\n", name);
+        fread(&read_mode, 4, 1, archiveFile);
         printf("name2 : %s\n", file_name);
         if (!feof(archiveFile))                                             // if the last file in archive is hard link
             fseek(archiveFile, -4, SEEK_CUR);                               // don't rewind 4 bytes after reading mode
 //        printf("name1 : %s\n", name);                                                                    // prevents infinite loop
         if(S_ISDIR(read_mode) || S_ISREG(read_mode)){
-            fread(&read_mode_int, 4, 1, archiveFile);
-            read_mode = (mode_t) read_mode_int;
+            fread(&read_mode, 4, 1, archiveFile);
             printf("not a hard link! mode is: %us\n", read_mode);
 //            printf("name : %s\n", name);
 
             time_t read_mtime;
-            int64_t read_mtime_int;
-            fread(&read_mtime_int, 8, 1, archiveFile);
-            read_mtime = (time_t) read_mtime_int;
+            fread(&read_mtime, 8, 1, archiveFile);
             printf("mtime : %ld\n", read_mtime);
 
             if (S_ISDIR(read_mode)){
                 printf("%s/ -- inode: %llu, mode: %o, mtime: %llu\n", file_name, inode_num, read_mode, (unsigned long long) read_mtime);
             }else {
                 off_t read_size;
-                int64_t read_size_int;
-                fread(&read_size_int, 8, 1, archiveFile);
-                read_size = (off_t) read_size_int;
+                fread(&read_size, 8, 1, archiveFile);
                 printf("size : %llu\n", read_size);
 
                 char *read_contents = malloc(read_size);
                 fread(read_contents, read_size, 1, archiveFile);
                 printf("read contents: %s\n", read_contents);
 
-                struct stat file_stat;
-                if (lstat(fullname, &file_stat) == -1){
-                    perror("lstat");
-                }
                 if (S_IXUSR == 1 || S_IXGRP == 1 || S_IXOTH == 1){
                     printf("%s* -- inode: %llu, mode: %o, mtime: %llu, size: %llu\n", file_name, inode_num, read_mode,
                            (unsigned long long) read_mtime, read_size);
@@ -153,10 +137,9 @@ void createArchive(FILE *archiveFile, char *inputDirectoryString){
         lstat(fullname, &file_stat);
         if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0 && !S_ISLNK(file_stat.st_mode)){
             printf("%s path: %s %llu, %lu\n", de->d_name, fullname, file_stat.st_ino, ftell(archiveFile));
-            int64_t inode_num = (int64_t) file_stat.st_ino;
-            fwrite(&inode_num, 8, 1, archiveFile);                   // inode #
+            fwrite(&file_stat.st_ino, 8, 1, archiveFile);                   // inode #
 
-            int32_t file_name_length = strlen(fullname);
+            int32_t file_name_length = strlen(fullname) + 1;
             fwrite(&file_name_length, 4, 1, archiveFile);                   // name length
             fwrite(fullname, file_name_length, 1, archiveFile);                  // name
 
@@ -165,16 +148,13 @@ void createArchive(FILE *archiveFile, char *inputDirectoryString){
                 printf("%s path: %s\n", de->d_name, fullname);
                 // at this point in the future, check if file is a hard link, if so, break here
 
-                int32_t mode = (int32_t) file_stat.st_mode;
-                fwrite(&mode, 4, 1, archiveFile);                      // mode
-                int64_t time_num = (int64_t) file_stat.st_mtimespec.tv_sec;
-                fwrite(&time_num, 8, 1, archiveFile);          // modification time
+                fwrite(&file_stat.st_mode, 4, 1, archiveFile);                      // mode
+                fwrite(&file_stat.st_mtimespec.tv_sec, 8, 1, archiveFile);          // modification time
 
                 if (S_ISDIR(file_stat.st_mode)){
                     printf("DIRECTORY\n");
                 }else {
-                    int64_t file_size = (int64_t) file_stat.st_size;
-                    fwrite(&file_size, 8, 1, archiveFile);             // size
+                    fwrite(&file_stat.st_size, 8, 1, archiveFile);             // size
 
                     FILE *inputFile = fopen(fullname,"r");
                     char *read_contents = malloc(file_stat.st_size);
