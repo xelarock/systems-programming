@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <utime.h>
 #include "inodemap.h"
 
 typedef struct {                // defines the options structure to hold the options for the program.
@@ -19,6 +21,7 @@ Options parseArgs(int argc, char *argv[]);
 void checkModes (int numTrans);
 void createArchive(FILE *archiveFile, char *inputDirectoryString);
 void printContents(char *archiveFileString);
+void extractArchive(FILE *archiveFile, DIR *currentDirectory);
 //char ** Map=NULL;
 
 int main(int argc, char *argv[]) {
@@ -34,6 +37,7 @@ int main(int argc, char *argv[]) {
         lstat(opts.inputDirectory, &file_stat);
         int64_t inode_num = (int64_t) file_stat.st_ino;
         fwrite(&inode_num , 8, 1, archiveFile);                   // inode #
+        set_inode(file_stat.st_ino, opts.inputDirectory);
         int32_t file_name_length = strlen(opts.inputDirectory);
         fwrite(&file_name_length, 4, 1, archiveFile);                   // name length
         fwrite(opts.inputDirectory, file_name_length, 1, archiveFile);                  // name
@@ -49,59 +53,125 @@ int main(int argc, char *argv[]) {
         printContents(opts.archiveFile);
     }
     if (opts.extractArchive == 1){
+        FILE *archiveFile = fopen(opts.archiveFile,"r");
+        int32_t magic_number;
+        fread(&magic_number, 4, 1, archiveFile);
+        if (magic_number != 0x7261746D){
+            fprintf(stderr, "Error: Bad magic number (%d), should be: %d.\n", magic_number, 0x7261746D);
+            exit(-1);
+        }
+        int64_t inode_num;
+        fread(&inode_num, 8, 1, archiveFile);
+        int32_t name_length;
+        fread(&name_length, 4, 1, archiveFile);
+        char *fullname = (char *)malloc(name_length * sizeof(char));
+        fread(fullname, name_length, 1, archiveFile);
+        int32_t mode_num;
+        fread(&mode_num, 4, 1, archiveFile);
+        int64_t time_num;
+        fread(&time_num, 8, 1, archiveFile);
+//        fwrite(&time_num, 8, 1, archiveFile);
+        set_inode((ino64_t) inode_num, fullname);
 
+        mkdir(fullname, (mode_t) mode_num);
+        DIR *currentDirectory = opendir(fullname);
+        extractArchive(archiveFile, currentDirectory);
+    }
+    return 0;
+}
+
+void extractArchive(FILE *archiveFile, DIR *currentDirectory){
+    ino64_t inode_num = 0;
+    while(fread(&inode_num, 8, 1, archiveFile) == 1){
+        printf("************************\n");
+        printf("inode num %llu \n", inode_num);
+        int32_t file_name_length;
+        fread(&file_name_length, 4, 1, archiveFile);
+        char *file_name =  malloc(file_name_length * sizeof(char));
+        fread(file_name, file_name_length, 1, archiveFile);
+        printf("filename: %s\n", file_name);
+
+        if(get_inode(inode_num) != NULL){
+            printf("HARD LINK\n");
+            char *src_name = (char *) malloc((strlen(get_inode(inode_num)) + 1) * sizeof(char));
+            strcpy(src_name, get_inode(inode_num));
+            link(src_name, file_name);
+        }else{
+            int32_t file_mode;
+            fread(&file_mode, 4, 1, archiveFile);
+            int64_t file_mtime;
+            fread(&file_mtime, 8, 1, archiveFile);
+            if (S_ISDIR((mode_t) file_mode)){
+                printf("DIRECTORY\n");
+                mkdir(file_name, (mode_t) file_mode);
+                set_inode(inode_num, file_name);
+            }else{
+                printf("FILE\n");
+                int64_t file_size;
+                fread(&file_size, 8, 1, archiveFile);
+
+                char *file_contents = (char *) malloc(file_size * sizeof(char));
+                fread(file_contents, file_size, 1, archiveFile);
+
+                FILE *currentFile = fopen(file_name,"w+");
+                fwrite(file_contents, file_size, 1, currentFile);
+                chmod(file_name, (mode_t) file_mode);
+                struct timeval time_val_ac;
+                struct timeval time_val_mod;
+                gettimeofday(&time_val_ac, NULL);
+                time_val_mod.tv_sec = (time_t) file_mtime;
+                time_val_mod.tv_usec = 0;
+//                time_to_set.modtime = time_val_mod;
+//                time_to_set.actime = time_val_ac;
+                struct timeval *times = (struct timeval *) malloc(2 * sizeof(struct timeval));
+                times[0] = time_val_ac;
+                times[1] = time_val_mod;
+                printf("time: %lu %lu, %d\n", (time_t) file_mtime, times[1].tv_sec, times[1].tv_usec);
+                fclose(currentFile);
+                utimes(file_name, times);
+
+                set_inode(inode_num, file_name);
+            }
+        }
     }
 
-    return 0;
 }
 
 void printContents(char *archiveFileString){
     FILE *archiveFile = fopen(archiveFileString,"r");
     int32_t magic_number;
-    char *fullname = (char *)malloc(sizeof(char)*258);
 
     fread(&magic_number, 4, 1, archiveFile);
     printf("hex: %x\n", magic_number);
 
-    while(feof(archiveFile) != 1){
+    ino64_t inode_num = 0;
+    while(fread(&inode_num, 8, 1, archiveFile) == 1){
         printf("+++++++++++++++++++++++\n");
-        ino64_t inode_num = 0;
-        fread(&inode_num, 8, 1, archiveFile);
-        printf("inode: %llu\n", inode_num);
 
         int32_t file_name_length;
         fread(&file_name_length, 4, 1, archiveFile);
-        printf("name length: %d\n", file_name_length);
 
-        char *file_name = (char *) malloc(file_name_length * sizeof(char));
+        char *file_name = (char *) malloc((file_name_length) * sizeof(char));
         fread(file_name, file_name_length, 1, archiveFile);
         file_name[file_name_length] = '\0';
-        printf("name : %s, %p, %d\n", file_name, file_name, file_name_length);
-//        char *name = (char *) malloc(file_name_length * sizeof(char));
-//        strcpy(name, file_name);
 
         mode_t read_mode;
         int32_t read_mode_int;
-
-        printf("&read_mode: %p, %lu\n", &read_mode, sizeof(read_mode));
         if (fread(&read_mode_int, 4, 1, archiveFile) == -1)
             perror("fread");
         read_mode = (mode_t) read_mode_int;
-        printf("name2 : %s\n", file_name);
+
         if (!feof(archiveFile))                                             // if the last file in archive is hard link
             fseek(archiveFile, -4, SEEK_CUR);                               // don't rewind 4 bytes after reading mode
-//        printf("name1 : %s\n", name);                                                                    // prevents infinite loop
+
         if(S_ISDIR(read_mode) || S_ISREG(read_mode)){
             fread(&read_mode_int, 4, 1, archiveFile);
             read_mode = (mode_t) read_mode_int;
-            printf("not a hard link! mode is: %us\n", read_mode);
-//            printf("name : %s\n", name);
 
             time_t read_mtime;
             int64_t read_mtime_int;
             fread(&read_mtime_int, 8, 1, archiveFile);
             read_mtime = (time_t) read_mtime_int;
-            printf("mtime : %ld\n", read_mtime);
 
             if (S_ISDIR(read_mode)){
                 printf("%s/ -- inode: %llu, mode: %o, mtime: %llu\n", file_name, inode_num, read_mode, (unsigned long long) read_mtime);
@@ -110,17 +180,11 @@ void printContents(char *archiveFileString){
                 int64_t read_size_int;
                 fread(&read_size_int, 8, 1, archiveFile);
                 read_size = (off_t) read_size_int;
-                printf("size : %llu\n", read_size);
 
-                char *read_contents = malloc(read_size);
+                char *read_contents = (char *) malloc(read_size * sizeof(char));
                 fread(read_contents, read_size, 1, archiveFile);
-                printf("read contents: %s\n", read_contents);
 
-                struct stat file_stat;
-                if (lstat(fullname, &file_stat) == -1){
-                    perror("lstat");
-                }
-                if (S_IXUSR == 1 || S_IXGRP == 1 || S_IXOTH == 1){
+                if ((read_mode & S_IXUSR) || (read_mode & S_IXGRP) || (read_mode & S_IXOTH)){
                     printf("%s* -- inode: %llu, mode: %o, mtime: %llu, size: %llu\n", file_name, inode_num, read_mode,
                            (unsigned long long) read_mtime, read_size);
                 }else{
@@ -128,11 +192,9 @@ void printContents(char *archiveFileString){
                            (unsigned long long) read_mtime, read_size);
                 }
             }
-
         }else{
             printf("%s -- inode: %llu\n", file_name, inode_num);
         }
-//        free(&*file_name);
     }
 }
 
