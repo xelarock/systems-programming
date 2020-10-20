@@ -13,7 +13,7 @@
 char const ** Map=NULL;
 
 void set_inode( ino_t i, const char * f ){
-    uint32_t mappos = i % MAPSIZE;
+    u_int32_t mappos = i % MAPSIZE;
     
     if( Map == NULL )
         Map = (const char  **)calloc(MAPSIZE, sizeof(char*));
