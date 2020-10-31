@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <utime.h>
+#include <unistd.h>
 #include "inodemap.h"
 
 typedef struct {                // defines the options structure to hold the options for the program.
@@ -63,12 +64,11 @@ int main(int argc, char *argv[]) {
             perror("fwrite");
             exit(-1);
         }
-        int64_t time_num = (int64_t) file_stat.st_mtimespec.tv_sec;
+        int64_t time_num = (int64_t) file_stat.st_mtim.tv_sec;
         if (!fwrite(&time_num, 8, 1, archiveFile)) {          // write modification time
             perror("fwrite");
             exit(-1);
         }
-        printf("end of dir1 \n");
         createArchive(archiveFile, opts.inputDirectory);                // recursively write files/directories to tar
         if (fclose(archiveFile) != 0){                                  // close tar
             perror("fclose");
@@ -99,16 +99,14 @@ int main(int argc, char *argv[]) {
             exit(-1);
         }
     }
-    return 0;
+    exit(0);
 }
 
 void extractArchive(FILE *archiveFile){
-    ino_t inode_num = 0;
+    ino_t inode_num;
     int64_t inode_num_int;
     while(fread(&inode_num_int, 8, 1, archiveFile) == 1){           // read the inode, if cannot read, eof
-//        printf("************************\n");                                 // so then exit and done extracting
-        inode_num = (ino_t) inode_num_int;
-//        printf("inode num %llu \n", inode_num);
+        inode_num = (ino_t) inode_num_int;                                      // so then exit and done extracting
         int32_t file_name_length;
         if (!fread(&file_name_length, 4, 1, archiveFile)){          // read file name length
             perror("fread");
@@ -124,10 +122,7 @@ void extractArchive(FILE *archiveFile){
             exit(-1);
         }
         file_name[file_name_length] = '\0';                                     // append null terminator
-//        printf("filename: %s\n", file_name);
-
         if(get_inode(inode_num) != NULL){                                       // check if hard link
-//            printf("HARD LINK\n");
             char *src_name = (char *) malloc((strlen(get_inode(inode_num)) + 1) * sizeof(char));  // space for path
             if (src_name == NULL){
                 perror("malloc");
@@ -154,14 +149,12 @@ void extractArchive(FILE *archiveFile){
                 exit(-1);
             }
             if (S_ISDIR((mode_t) file_mode)){                           // if mode is dir
-//                printf("DIRECTORY\n");
                 if (mkdir(file_name, (mode_t) file_mode) != 0){             // mkdir
                     perror("mkdir");
                     exit(-1);
                 }
                 set_inode(inode_num, file_name);                            // add dir to inode
             }else{
-//                printf("FILE\n");
                 int64_t file_size;
                 if (!fread(&file_size, 8, 1, archiveFile)){     // read file size
                     perror("fread");
@@ -202,7 +195,6 @@ void extractArchive(FILE *archiveFile){
                 time_val_mod.tv_sec = (time_t) file_mtime;                  // set mtime
                 time_val_mod.tv_usec = 0;
                 struct timeval times[2] = {time_val_ac, time_val_mod};
-//                printf("time: %lu %lu, %d\n", (time_t) file_mtime, times[1].tv_sec, times[1].tv_usec);
                 if (utimes(file_name, times) != 0){                         // set times
                     perror("utimes");
                     exit(-1);
@@ -229,23 +221,19 @@ void printContents(char *archiveFileString){
         perror("fread");
         exit(-1);
     }
-    printf("hex: %x\n", magic_number);                                                  // check magic number
-    if (magic_number != 0x7261746D){
+    if (magic_number != 0x7261746D){                                                    // check magic number
         fprintf(stderr, "Error: Bad magic number (%d), should be: %d.\n", magic_number, 0x7261746D);
         exit(-1);
     }
     ino_t inode_num = 0;
     int64_t inode_num_int;
     while(fread(&inode_num_int, 8, 1, archiveFile) == 1){       // loop through reading inode. if cannot
-//        printf("+++++++++++++++++++++++\n");
-
         inode_num = (ino_t) inode_num_int;                                  // read, then eof and done reading tar
         int32_t file_name_length;
         if (!fread(&file_name_length, 4, 1, archiveFile)){      // read file length
             perror("fread");
             exit(-1);
         }
-
         char *file_name = (char *) malloc((file_name_length) * sizeof(char));   // make space for file name
         if (file_name == NULL){
             perror("malloc");
@@ -255,11 +243,9 @@ void printContents(char *archiveFileString){
             perror("fread");
             exit(-1);
         }
-//        printf("file name: %s\n", file_name);
         file_name[file_name_length] = '\0';                                             // add null terminator
-
         if (get_inode(inode_num) != NULL){
-            printf("%s -- inode: %llu\n", file_name, inode_num);                        // print if hard link
+            printf("%s -- inode: %lu\n", file_name, inode_num);                        // print if hard link
         }else{
             mode_t read_mode;
             int32_t read_mode_int;
@@ -267,9 +253,7 @@ void printContents(char *archiveFileString){
                 perror("fread");
                 exit(-1);
             }
-//            fread(&read_mode_int, 4, 1, archiveFile);
             read_mode = (mode_t) read_mode_int;
-
             time_t read_mtime;
             int64_t read_mtime_int;
             if (!fread(&read_mtime_int, 8, 1, archiveFile)){                // read m time
@@ -278,9 +262,8 @@ void printContents(char *archiveFileString){
             }
             read_mtime = (time_t) read_mtime_int;
             set_inode(inode_num, file_name);                                            // add to inode map
-
             if (S_ISDIR(read_mode)){                                                    // if directory print
-                printf("%s/ -- inode: %llu, mode: %o, mtime: %llu\n", file_name, inode_num, read_mode, (unsigned long long) read_mtime);
+                printf("%s/ -- inode: %lu, mode: %o, mtime: %llu\n", file_name, inode_num, read_mode, (unsigned long long) read_mtime);
             }else {
                 off_t read_size;                                                        // read file size
                 int64_t read_size_int;
@@ -289,7 +272,6 @@ void printContents(char *archiveFileString){
                     exit(-1);
                 }
                 read_size = (off_t) read_size_int;
-
                 if (read_size != 0) {                                                   // if file size is not 0
                     char *read_contents = (char *) malloc(read_size * sizeof(char)); // make space for contents
                     if (read_contents == NULL) {
@@ -301,12 +283,11 @@ void printContents(char *archiveFileString){
                         exit(-1);
                     }
                 }
-
                 if ((read_mode & S_IXUSR) || (read_mode & S_IXGRP) || (read_mode & S_IXOTH)){      // if executable
-                    printf("%s* -- inode: %llu, mode: %o, mtime: %llu, size: %llu\n", file_name, inode_num, read_mode,
+                    printf("%s* -- inode: %lu, mode: %o, mtime: %llu, size: %lu\n", file_name, inode_num, read_mode,
                            (unsigned long long) read_mtime, read_size);
                 }else{                                                                              // otherwise normal
-                    printf("%s -- inode: %llu, mode: %o, mtime: %llu, size: %llu\n", file_name, inode_num, read_mode,
+                    printf("%s -- inode: %lu, mode: %o, mtime: %llu, size: %lu\n", file_name, inode_num, read_mode,
                            (unsigned long long) read_mtime, read_size);
                 }
             }
@@ -322,18 +303,12 @@ void createArchive(FILE *archiveFile, char *inputDirectoryString){
     struct dirent *de;
     struct stat file_stat;
     char * fullname;
-//    if (fseek(archiveFile, 0, SEEK_END) != 0){
-//        perror("fseek");
-//        exit(-1);
-//    }
 
     DIR *input_directory = opendir(inputDirectoryString);           // open the input directory
     if (input_directory == NULL){
         perror("opendir");
         exit(-1);
     }
-
-//    printf("inputDir: %s\n", inputDirectoryString);
     fullname = (char *) malloc((strlen(inputDirectoryString)+258));      // make space for full name
     if (fullname == NULL){
         perror("malloc");
@@ -349,7 +324,6 @@ void createArchive(FILE *archiveFile, char *inputDirectoryString){
             exit(-1);
         }
         if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0 && !S_ISLNK(file_stat.st_mode)){
-//            printf("%s path: %s %llu, %lu\n", de->d_name, fullname, file_stat.st_ino, ftell(archiveFile));
             int64_t inode_num = (int64_t) file_stat.st_ino;             // ignore ".." and "." and soft links
             if (!fwrite(&inode_num, 8, 1, archiveFile)) {                // inode #
                 perror("fwrite");
@@ -364,28 +338,24 @@ void createArchive(FILE *archiveFile, char *inputDirectoryString){
                 perror("fwrite");
                 exit(-1);
             }
-
             if(!get_inode( file_stat.st_ino )) {            //inode not yet seen; add to list, aka not a hard link
                 set_inode(file_stat.st_ino, fullname);
-//                printf("%s path: %s\n", de->d_name, fullname);
                 int32_t mode = (int32_t) file_stat.st_mode;
                 if (!fwrite(&mode, 4, 1, archiveFile)) {                      // mode
                     perror("fwrite");
                     exit(-1);
                 }
-                int64_t time_num = (int64_t) file_stat.st_mtimespec.tv_sec;
+                int64_t time_num = (int64_t) file_stat.st_mtim.tv_sec;
                 if (!fwrite(&time_num, 8, 1, archiveFile)) {          // modification time
                     perror("fwrite");
                     exit(-1);
                 }
                 if (!S_ISDIR(file_stat.st_mode)){
-//                    printf("DIRECTORY\n");
                     int64_t file_size = (int64_t) file_stat.st_size;
                     if (!fwrite(&file_size, 8, 1, archiveFile)) {             // size
                         perror("fwrite");
                         exit(-1);
                     }
-
                     if (file_size != 0) {                                                   // if size is not 0
                         FILE *inputFile = fopen(fullname, "r");                       // read file to tar
                         if (inputFile == NULL) {
@@ -433,29 +403,24 @@ Options parseArgs(int argc, char *argv[]){
     int o;
     int numOptions = 0;
 
-    while (optind < argc) {                                              // Iterate through all option arguments
-        if ((o = getopt(argc, argv, "cxtf:")) != -1) {
+    while ((o = getopt(argc, argv, "cxtf:")) != -1) {                                              // Iterate through all option arguments
             switch (o) {
             case 'c':                                   // c case
-//                printf("C!\n");
                 numOptions++;
                 checkModes(numOptions);
                 opts.createArchive = 1;
                 break;
             case 'x':                                   // x case
-//                printf("X!\n");
                 numOptions++;
                 checkModes(numOptions);
                 opts.extractArchive = 1;
                 break;
             case 't':                                   // t case
-//                printf("T!\n");
                 numOptions++;
                 checkModes(numOptions);
                 opts.printContents = 1;
                 break;
             case 'f':                                   // f case
-//                printf("F! %s\n", optarg);
                 opts.archiveFile = optarg;
                 opts.yesArchiveFile = 1;
                 break;
@@ -463,14 +428,16 @@ Options parseArgs(int argc, char *argv[]){
                 fprintf(stderr, "Error: No tarfile specified.\n");
                     exit(-1);
             }
-        }else {
-//            printf("input: %s\n", argv[optind]);
-            opts.inputDirectory = argv[optind];     // parse the input directory
-            opts.yesInputDirectory = 1;
-//            printf("opening dir: %s\n", opts.inputDirectory);
-            optind++;
+    }
+    if (optind <  argc){
+        for(; optind < argc; optind++){
+            if (opts.createArchive) {
+                opts.inputDirectory = argv[optind];     // parse the input directory
+                opts.yesInputDirectory = 1;
+            }
         }
     }
+
     if (numOptions == 0){                                   // if no option made
         fprintf(stderr, "Error: No mode specified.\n");
         exit(-1);
