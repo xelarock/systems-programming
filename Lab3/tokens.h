@@ -14,7 +14,7 @@
 //  input: null-terminated string
 //  output: array of null-terminated strings
 //          output array terminated by a NULL pointer
-char ** get_tokens( const char * line );
+char ** get_tokens( const char * line, const char * delim  );
 
 void free_tokens( char ** tokens );
 

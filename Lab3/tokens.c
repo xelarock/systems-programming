@@ -11,10 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-char ** get_tokens( const char * line ) {
+char ** get_tokens( const char * line, const char * delim ) {
     char **tokens=NULL;
     char * line_copy;
-    const char * delim = " \t\n";
+//    const char * delim = " \t\n";
     char * cur_token;
     int num_tokens=0;
     
