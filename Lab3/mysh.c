@@ -26,14 +26,14 @@ typedef struct {
 }Cmd;
 
 typedef struct {
-    bool process_location; // true is foreground, false is backgrounf
+    bool foreground_process; // true is foreground, false is background
     Cmd *cmd_list;
     int num_commands;
 }CmdSet;
 
 Options parseArgs(int argc, char *argv[]);
 CmdSet parseCommands(char* cmd_line_args);
-char** removeOperators(char **tokens, char *operator, char* filename);
+char** removeOperators(char **tokens, char *operator, char* filename, int operator_loc);
 int error = 0;
 
 int main(int argc, char **argv){
@@ -44,12 +44,11 @@ int main(int argc, char **argv){
     int pid, wpid,status;
     Options opts = parseArgs(argc, argv);
 
-    printf("\n%s", "opts.promptString");
+//    printf("\n%s", "opts.promptString");
     while(1){
-        printf("\n%s!!", opts.promptString);
+        printf("%s", opts.promptString);
         fgets_return = fgets(cmdargv, 1024, stdin);
         cmdargv[strlen(cmdargv) - 1] = '\0';                            // remove training newline char
-//        cmd_tokens = get_tokens(cmdargv);
 
         error = 0;
         CmdSet set_of_commands = parseCommands(cmdargv);
@@ -69,30 +68,47 @@ int main(int argc, char **argv){
         if (error == 0){
             pid = fork();
             if (pid == 0 ){
-//            printf("child process!**************************** pid: %d, ppid: %d\n", getpid(), getppid());
-                int output_fd;
+            printf("child process!**************************** pid: %d, ppid: %d\n", getpid(), getppid());
+                int file_descriptor;
                 printf("Running command with output file: %s\n", set_of_commands.cmd_list[0].output_file_name);
-                printf("output truth: %d\n", strcmp(set_of_commands.cmd_list[0].output_file_name, ""));
-                if (strcmp(set_of_commands.cmd_list[0].output_file_name, "") != 0){
-                    output_fd = open(set_of_commands.cmd_list[0].output_file_name, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP |
-                                                                                            S_IROTH);
-                    int dup_out = dup2(output_fd, 1);
-                    fprintf(stderr, "dup out: %d\n", dup_out);
-                    close(dup_out);
+                if ((strcmp(set_of_commands.cmd_list[0].output_file_name, "") != 0)){
+                    if (set_of_commands.cmd_list[0].append == true){
+                        file_descriptor = open(set_of_commands.cmd_list[0].output_file_name, O_CREAT | O_WRONLY | O_APPEND,
+                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                    }else{
+                        file_descriptor = open(set_of_commands.cmd_list[0].output_file_name, O_CREAT | O_WRONLY,
+                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                    }
+//                    printf("output: %d\n", file_descriptor);
+                    int dup_out = dup2(file_descriptor, 1);
+                    close(file_descriptor);
                 }
+
+                if ((strcmp(set_of_commands.cmd_list[0].input_file_name, "") != 0)){
+                    file_descriptor = open(set_of_commands.cmd_list[0].input_file_name, O_RDONLY);
+//                    printf("input: %d\n", file_descriptor);
+                    int dup_out = dup2(file_descriptor, 0);
+                    close(file_descriptor);
+                }
+
                 if( execvp(set_of_commands.cmd_list[0].cmd[0], set_of_commands.cmd_list[0].cmd ) == -1 ) {
                     perror(set_of_commands.cmd_list[0].cmd[0]);
                 }
                 exit(-1);
             }else{
 //            struct rusage ru;
-//            printf("parent before wait\n");
-//            printf("boolean: %d\n", set_of_commands.process_location);
-                if (set_of_commands.process_location){
-//                printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
-                    wait(&status);
+                printf("parent before wait\n");
+//            printf("boolean: %d\n", set_of_commands.foreground_process);
+                if (set_of_commands.foreground_process){
+                    printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
+                    do {
+                        wpid = wait(&status);
+                        printf("waited again for: %d\n", wpid);
+                    }while(wpid != pid);
+
+                    printf("waited for pid with process id: %d\n", wpid);
                 }
-//            printf("parent after wait************************\n");
+                printf("parent after wait************************\n");
             }
         }
 
@@ -109,9 +125,9 @@ CmdSet parseCommands(char* cmd_line_args){
     if (strcmp(&cmd_line_args[strlen(cmd_line_args)-1], "&") == 0) {
 //        printf("run in background!\n");
         cmd_line_args[strlen(cmd_line_args)-1] = '\0';
-        set_of_commands.process_location = false;
+        set_of_commands.foreground_process = false;
     }else{
-        set_of_commands.process_location = true;
+        set_of_commands.foreground_process = true;
     }
 
     if ((strchr(cmd_line_args, '&') != NULL) && strcmp(background_char, "&")){
@@ -125,7 +141,7 @@ CmdSet parseCommands(char* cmd_line_args){
         int counter = 0;
         while (pipe_tokens[counter] != NULL)                            // number of commands
             counter++;
-        printf("Number of commands!: %d\n", counter);
+//        printf("Number of commands!: %d\n", counter);
         set_of_commands.cmd_list = malloc(counter * sizeof(Cmd));
 
         for (num_cmds = 0; pipe_tokens[num_cmds] != NULL; num_cmds++) {
@@ -136,12 +152,12 @@ CmdSet parseCommands(char* cmd_line_args){
             new_cmd.input_file_name = malloc(1024 * sizeof(char));
             new_cmd.output_file_name = malloc(1024 * sizeof(char));
             new_cmd.cmd = cmd_tokens;
-            printf("hello!\n");
+//            printf("hello!\n");
             for (int num_args = 0; new_cmd.cmd[num_args] != NULL; num_args++) {
-                printf("token cmd %d: %s\n", num_args, cmd_tokens[num_args]);
+//                printf("token cmd %d: %s\n", num_args, cmd_tokens[num_args]);
 
                 if (strcmp(new_cmd.cmd[num_args], ">") == 0) {
-                    printf("output name %s\n", new_cmd.output_file_name);
+//                    printf("output name %s\n", new_cmd.output_file_name);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for output redirection.\n");
                         error = 1;
@@ -151,7 +167,7 @@ CmdSet parseCommands(char* cmd_line_args){
                     } else {
                         printf("Output File %s\n", new_cmd.cmd[num_args + 1]);
                         new_cmd.output_file_name = new_cmd.cmd[num_args + 1];
-                        new_cmd.cmd = removeOperators(new_cmd.cmd, ">", new_cmd.output_file_name);
+                        new_cmd.cmd = removeOperators(new_cmd.cmd, ">", new_cmd.output_file_name, num_args);
 //                        printf("result: %s %s %s\n", new_cmd.cmd[0], new_cmd.cmd[1], new_cmd.cmd[2]);
                         num_args -= 1;
                     }
@@ -159,7 +175,7 @@ CmdSet parseCommands(char* cmd_line_args){
 
 //                printf("check here! %d\n", num_args);
                 if (strcmp(new_cmd.cmd[num_args], "<") == 0) {
-                    printf("input name %s\n", new_cmd.input_file_name);
+//                    printf("input name %s\n", new_cmd.input_file_name);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for input redirection.\n");
                         error = 1;
@@ -169,14 +185,14 @@ CmdSet parseCommands(char* cmd_line_args){
                     } else {
                         printf("input File %s\n", new_cmd.cmd[num_args + 1]);
                         new_cmd.input_file_name = new_cmd.cmd[num_args + 1];
-                        new_cmd.cmd = removeOperators(new_cmd.cmd, "<", new_cmd.input_file_name);
+                        new_cmd.cmd = removeOperators(new_cmd.cmd, "<", new_cmd.input_file_name, num_args);
                         num_args -= 1;
                     }
                 }
 
 //                printf("check before append\n");
                 if (strcmp(new_cmd.cmd[num_args], ">>") == 0) {
-                    printf("output append name %s\n", new_cmd.output_file_name);
+//                    printf("output append name %s\n", new_cmd.output_file_name);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for output redirection.\n");
                         error = 1;
@@ -187,7 +203,7 @@ CmdSet parseCommands(char* cmd_line_args){
                         new_cmd.output_file_name = new_cmd.cmd[num_args + 1];
                         new_cmd.append = true;
                         printf("Output append File %s, %d\n", new_cmd.output_file_name, new_cmd.append);
-                        new_cmd.cmd = removeOperators(new_cmd.cmd, ">>", new_cmd.output_file_name);
+                        new_cmd.cmd = removeOperators(new_cmd.cmd, ">>", new_cmd.output_file_name, num_args);
                         num_args -= 1;
                     }
                 }
@@ -200,7 +216,7 @@ CmdSet parseCommands(char* cmd_line_args){
     return set_of_commands;
 }
 
-char** removeOperators(char **tokens, char *operator, char* filename){
+char** removeOperators(char **tokens, char *operator, char* filename, int operator_loc){
     int counter = 0;
     while(tokens[counter] != NULL){
         counter++;
@@ -211,7 +227,7 @@ char** removeOperators(char **tokens, char *operator, char* filename){
 
     int offset = 0;
     for (int i = 0; tokens[i] != NULL; i++){
-        if ((offset != 2) && ((strcmp(tokens[i], operator) == 0) ||  (strcmp(tokens[i], filename) == 0))) {
+        if ((offset != 2) && (i == operator_loc || (i == operator_loc + 1))) {
 //            printf("removed token!: %s\n", tokens[i]);
             offset++;
         }else{
