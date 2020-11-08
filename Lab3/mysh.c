@@ -65,53 +65,108 @@ int main(int argc, char **argv){
                 exit(0);
             }
         }
-        if (error == 0){
-            pid = fork();
-            if (pid == 0 ){
-            printf("child process!**************************** pid: %d, ppid: %d\n", getpid(), getppid());
-                int file_descriptor;
-                printf("Running command with output file: %s\n", set_of_commands.cmd_list[0].output_file_name);
-                if ((strcmp(set_of_commands.cmd_list[0].output_file_name, "") != 0)){
-                    if (set_of_commands.cmd_list[0].append == true){
-                        file_descriptor = open(set_of_commands.cmd_list[0].output_file_name, O_CREAT | O_WRONLY | O_APPEND,
-                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-                    }else{
-                        file_descriptor = open(set_of_commands.cmd_list[0].output_file_name, O_CREAT | O_WRONLY,
-                                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+        for (int cmd_index = 0; cmd_index < set_of_commands.num_commands; cmd_index++) {
+            printf("RUNNING COMMAND #%d\n", cmd_index);
+            int pipefd[2], prevpipefd[2];
+            if ((set_of_commands.num_commands > 1) && (cmd_index < set_of_commands.num_commands - 1)){
+                pipe(pipefd);
+            }
+            if (error == 0) {
+                pid = fork();
+                if (pid == 0) {
+                    printf("child process!**************************** pid: %d, ppid: %d\n", getpid(), getppid());
+                    int file_descriptor;
+                    printf("Running command with output file: %s\n", set_of_commands.cmd_list[cmd_index].output_file_name);
+
+                    printf("right before pipe stuff\n");
+                    if (set_of_commands.num_commands > 1){
+                        if (cmd_index == 0){
+                            printf("Command 0!!!!!!!! \n");
+                            dup2(pipefd[1], 1);
+                            close(pipefd[0]);
+                            close(pipefd[1]);
+                            fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
+                        }else if (cmd_index == set_of_commands.num_commands - 1){
+                            printf("command 2!!!!!!\n");
+                            dup2(prevpipefd[0], 0);
+                            close(prevpipefd[0]);
+                            close(prevpipefd[1]);
+                        }else{
+                            printf("Command 1!!!!!!!! \n");
+                            dup2(prevpipefd[0], 0);
+                            dup2(pipefd[1], 1);
+                            close(pipefd[0]);
+                            close(pipefd[1]);
+                            close(prevpipefd[1]);
+                            close(prevpipefd[0]);
+                        }
+
+
+//                        close(pipefd[1]);
+//                        close(prevpipefd[1]);
+//                        close(prevpipefd[0]);
                     }
-//                    printf("output: %d\n", file_descriptor);
-                    int dup_out = dup2(file_descriptor, 1);
-                    close(file_descriptor);
-                }
+//                    printf("after pipe stuff: %s\n", set_of_commands.cmd_list[cmd_index].cmd[0]);
 
-                if ((strcmp(set_of_commands.cmd_list[0].input_file_name, "") != 0)){
-                    file_descriptor = open(set_of_commands.cmd_list[0].input_file_name, O_RDONLY);
-//                    printf("input: %d\n", file_descriptor);
-                    int dup_out = dup2(file_descriptor, 0);
-                    close(file_descriptor);
-                }
+                    if ((strcmp(set_of_commands.cmd_list[cmd_index].output_file_name, "") != 0)) {
+                        if (set_of_commands.cmd_list[cmd_index].append == true) {
+                            file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name,
+                                                   O_CREAT | O_WRONLY | O_APPEND,
+                                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                        } else {
+                            file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name, O_CREAT | O_WRONLY,
+                                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                        }
+                        //                    printf("output: %d\n", file_descriptor);
+                        int dup_out = dup2(file_descriptor, 1);
+                        close(file_descriptor);
+                    }
 
-                if( execvp(set_of_commands.cmd_list[0].cmd[0], set_of_commands.cmd_list[0].cmd ) == -1 ) {
-                    perror(set_of_commands.cmd_list[0].cmd[0]);
-                }
-                exit(-1);
-            }else{
-//            struct rusage ru;
-                printf("parent before wait\n");
-//            printf("boolean: %d\n", set_of_commands.foreground_process);
-                if (set_of_commands.foreground_process){
-                    printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
-                    do {
-                        wpid = wait(&status);
-                        printf("waited again for: %d\n", wpid);
-                    }while(wpid != pid);
+                    if ((strcmp(set_of_commands.cmd_list[cmd_index].input_file_name, "") != 0)) {
+                        file_descriptor = open(set_of_commands.cmd_list[cmd_index].input_file_name, O_RDONLY);
+                        //                    printf("input: %d\n", file_descriptor);
+                        fprintf(stderr, "fd for open %d\n", file_descriptor);
+                        int dup_out = dup2(file_descriptor, 0);
+                        fprintf(stderr, "fd for input %d\n", dup_out);
+                        close(file_descriptor);
+                    }
 
-                    printf("waited for pid with process id: %d\n", wpid);
+//                    close(pipefd[1]);
+//                    close(prevpipefd[1]);
+                    if (execvp(set_of_commands.cmd_list[cmd_index].cmd[0], set_of_commands.cmd_list[cmd_index].cmd) == -1) {
+                        perror(set_of_commands.cmd_list[cmd_index].cmd[0]);
+                    }
+                    exit(-1);
+                } else {
+                    //            struct rusage ru;
+                    fprintf(stderr, "parent before wait\n");
+                    //            printf("boolean: %d\n", set_of_commands.foreground_process);
+
+                    if (set_of_commands.foreground_process) {
+                        printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
+                        do {
+                            fprintf(stderr, "waiting!");
+                            wpid = wait(&status);
+
+                            printf("waited again for: %d\n", wpid);
+                        } while (wpid != pid);
+
+                        if (set_of_commands.num_commands > 1){
+                            prevpipefd[0] = pipefd[0];
+                            prevpipefd[1] = pipefd[1];
+
+                            fprintf(stderr, "closing in parent %d\n", pipefd[1]);
+                            close(pipefd[1]);
+                            close(prevpipefd[1]);
+                        }
+
+                        printf("waited for pid with process id: %d\n", wpid);
+                    }
+                    printf("parent after wait************************\n");
                 }
-                printf("parent after wait************************\n");
             }
         }
-
     }
 }
 
