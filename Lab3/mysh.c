@@ -86,7 +86,7 @@ int main(int argc, char **argv){
                         if (cmd_index == 0){
                             printf("Command 0!!!!!!!! \n");
                             dup2(pipefd[1], 1);
-//                            close(pipefd[0]);
+                            close(pipefd[0]);
                             close(pipefd[1]);
                             fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
                         }else if (cmd_index == set_of_commands.num_commands - 1){
@@ -100,7 +100,7 @@ int main(int argc, char **argv){
                             printf("Command 1!!!!!!!! \n");
                             dup2(prevpipefd[0], 0);
                             dup2(pipefd[1], 1);
-//                            close(pipefd[0]);
+                            close(pipefd[0]);
                             close(pipefd[1]);
 //                            close(prevpipefd[1]);
                             close(prevpipefd[0]);
@@ -156,29 +156,31 @@ int main(int argc, char **argv){
                         } while (wpid != pid);
 
                         if (set_of_commands.num_commands > 1){
-                            fprintf(stderr, "PARENT!: pipe0: %d, pipe1: %d, prev0: %d, prev1: %d\n", pipefd[0], pipefd[1],
-                                    prevpipefd[0], prevpipefd[1]);
-                            prevpipefd[0] = pipefd[0];
-                            prevpipefd[1] = pipefd[1];
-                            if (cmd_index == 0){
-                                printf("Command 0!!!!!!!! \n");
-//                                close(pipefd[0]);
-                                close(pipefd[1]);
-                                fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
-                            }else if (cmd_index == set_of_commands.num_commands - 1){
-                                printf("command 2!!!!!!\n");
-                                close(prevpipefd[0]);
-//                                close(prevpipefd[1]);
-//                            close(pipefd[0]);
-//                            close(pipefd[1]);
-                            }else{
-                                printf("Command 1!!!!!!!! \n");
-
-                            }
+//                            fprintf(stderr, "PARENT!: pipe0: %d, pipe1: %d, prev0: %d, prev1: %d\n", pipefd[0], pipefd[1],
+//                                    prevpipefd[0], prevpipefd[1]);
+//                            prevpipefd[0] = pipefd[0];
+//                            prevpipefd[1] = pipefd[1];
+//                            if (cmd_index == 0){
+//                                printf("Command 0!!!!!!!! \n");
+////                                close(pipefd[0]);
+//                                close(pipefd[1]);
+//                                fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
+//                            }else if (cmd_index == set_of_commands.num_commands - 1){
+//                                printf("command 2!!!!!!\n");
+//                                close(prevpipefd[0]);
+////                                close(prevpipefd[1]);
+////                            close(pipefd[0]);
+////                            close(pipefd[1]);
+//                            }else{
+//                                printf("Command 1!!!!!!!! \n");
+//
+//                            }
 
 //                            close(pipefd[0]);
                             close(pipefd[1]);
-                            close(prevpipefd[1]);
+                            close(prevpipefd[0]);
+                            prevpipefd[0] = pipefd[0];
+                            prevpipefd[1] = pipefd[1];
 //                            close(prevpipefd[0]);
 //                            prevpipefd[0] = pipefd[0];
 //                            prevpipefd[1] = pipefd[1];
