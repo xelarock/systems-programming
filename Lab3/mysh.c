@@ -33,6 +33,8 @@ typedef struct {
 
 Options parseArgs(int argc, char *argv[]);
 CmdSet parseCommands(char* cmd_line_args);
+bool keepWaiting(int *foreground_processes, int num_cmds);
+void setForegroundProcess(int *foreground_processes, int pid, int num_cmds);
 char** removeOperators(char **tokens, char *operator, char* filename, int operator_loc);
 int error = 0;
 
@@ -40,9 +42,11 @@ int main(int argc, char **argv){
     char * cmdargv;
     char * fgets_return;
     cmdargv = malloc(1024);
+    bool cmds_executed = false;
     char **cmd_tokens;
     int pid, wpid,status;
     Options opts = parseArgs(argc, argv);
+    int *foreground_pids;
 
 //    printf("\n%s", "opts.promptString");
     while(1){
@@ -59,6 +63,8 @@ int main(int argc, char **argv){
                        set_of_commands.cmd_list[i].output_file_name);
         }
 
+        foreground_pids = (int *) malloc(set_of_commands.num_commands * sizeof(int));
+
         if( fgets_return == NULL || strcmp(set_of_commands.cmd_list[0].cmd[0], "exit") == 0){
             if (errno != EINTR){
                 printf("Goodbye!\n");
@@ -66,9 +72,15 @@ int main(int argc, char **argv){
             }
         }
 
+        int pipefd[] = {-1, -1}, prevpipefd[] = {-1, -1};
         for (int cmd_index = 0; cmd_index < set_of_commands.num_commands; cmd_index++) {
             printf("RUNNING COMMAND #%d\n", cmd_index);
-            int pipefd[2], prevpipefd[2];
+
+            if (strcmp(set_of_commands.cmd_list[cmd_index].cmd[0], "") == 0){
+                fprintf(stderr,"Error: Invalid null command.\n");
+                break;
+            }
+
             if ((set_of_commands.num_commands > 1) && (cmd_index < set_of_commands.num_commands - 1)){
                 pipe(pipefd);
             }
@@ -118,23 +130,33 @@ int main(int argc, char **argv){
                                                    O_CREAT | O_WRONLY | O_APPEND,
                                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
                         } else {
-                            file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name, O_CREAT | O_WRONLY,
-                                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                            file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name,
+                                                   O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
                         }
-                        //                    printf("output: %d\n", file_descriptor);
-                        int dup_out = dup2(file_descriptor, 1);
-                        close(file_descriptor);
+                        if (file_descriptor == -1){
+                            fprintf(stderr, "Error: open(\"%s\"): %s\n", set_of_commands.cmd_list[cmd_index].output_file_name, strerror(errno));
+                            break;
+                        }else {
+                            int dup_out = dup2(file_descriptor, 1);
+                            close(file_descriptor);
+                        }
                     }
 
                     if ((strcmp(set_of_commands.cmd_list[cmd_index].input_file_name, "") != 0)) {
                         file_descriptor = open(set_of_commands.cmd_list[cmd_index].input_file_name, O_RDONLY);
                         //                    printf("input: %d\n", file_descriptor);
-                        fprintf(stderr, "fd for open %d\n", file_descriptor);
-                        int dup_out = dup2(file_descriptor, 0);
-                        fprintf(stderr, "fd for input %d\n", dup_out);
-                        close(file_descriptor);
+                        if (file_descriptor == -1){
+                            fprintf(stderr, "Error: open(\"%s\"): %s\n", set_of_commands.cmd_list[cmd_index].input_file_name, strerror(errno));
+                            break;
+                        }else {
+                            fprintf(stderr, "fd for open %d\n", file_descriptor);
+                            int dup_out = dup2(file_descriptor, 0);
+                            fprintf(stderr, "fd for input %d\n", dup_out);
+                            close(file_descriptor);
+                        }
                     }
 
+                    fprintf(stderr, "about to execute cmd %s on pid %d\n", set_of_commands.cmd_list[cmd_index].cmd[0], getpid());
 //                    close(pipefd[1]);
 //                    close(prevpipefd[1]);
                     if (execvp(set_of_commands.cmd_list[cmd_index].cmd[0], set_of_commands.cmd_list[cmd_index].cmd) == -1) {
@@ -145,59 +167,58 @@ int main(int argc, char **argv){
                     //            struct rusage ru;
                     fprintf(stderr, "parent before wait\n");
                     //            printf("boolean: %d\n", set_of_commands.foreground_process);
+                    foreground_pids[cmd_index] = pid;
 
-                    if (set_of_commands.foreground_process) {
+
+
+                    if (set_of_commands.foreground_process && (cmd_index == (set_of_commands.num_commands - 1))) {
+                        printf("RUNNING LAST CMD\n");
                         printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
-                        do {
-                            fprintf(stderr, "waiting!");
+                        while (keepWaiting(foreground_pids, set_of_commands.num_commands)){
+                            fprintf(stderr, "waiting!\n");
                             wpid = wait(&status);
-
-                            printf("waited again for: %d\n", wpid);
-                        } while (wpid != pid);
-
-                        if (set_of_commands.num_commands > 1){
-//                            fprintf(stderr, "PARENT!: pipe0: %d, pipe1: %d, prev0: %d, prev1: %d\n", pipefd[0], pipefd[1],
-//                                    prevpipefd[0], prevpipefd[1]);
-//                            prevpipefd[0] = pipefd[0];
-//                            prevpipefd[1] = pipefd[1];
-//                            if (cmd_index == 0){
-//                                printf("Command 0!!!!!!!! \n");
-////                                close(pipefd[0]);
-//                                close(pipefd[1]);
-//                                fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
-//                            }else if (cmd_index == set_of_commands.num_commands - 1){
-//                                printf("command 2!!!!!!\n");
-//                                close(prevpipefd[0]);
-////                                close(prevpipefd[1]);
-////                            close(pipefd[0]);
-////                            close(pipefd[1]);
-//                            }else{
-//                                printf("Command 1!!!!!!!! \n");
-//
-//                            }
-
-//                            close(pipefd[0]);
-                            close(pipefd[1]);
-                            close(prevpipefd[0]);
-                            prevpipefd[0] = pipefd[0];
-                            prevpipefd[1] = pipefd[1];
-//                            close(prevpipefd[0]);
-//                            prevpipefd[0] = pipefd[0];
-//                            prevpipefd[1] = pipefd[1];
-//
-//                            fprintf(stderr, "closing in parent %d, %d\n", pipefd[1], prevpipefd[1]);
-//                            close(pipefd[1]);
-////                            close(pipefd[0]);
-//                            close(prevpipefd[1]);
-////                            close(prevpipefd[0]);
+                            setForegroundProcess(foreground_pids, wpid, set_of_commands.num_commands);
+                            fprintf(stderr, "waited again for: %d\n", wpid);
                         }
 
                         printf("waited for pid with process id: %d\n", wpid);
+                    }
+                    if (set_of_commands.num_commands > 1){
+
+                        close(pipefd[1]);
+                        close(prevpipefd[0]);
+                        prevpipefd[0] = pipefd[0];
+                        prevpipefd[1] = pipefd[1];
+
                     }
                     printf("parent after wait************************\n");
                 }
             }
         }
+    }
+}
+
+void setForegroundProcess(int *foreground_processes, int pid, int num_cmds){
+    for (int i = 0; i < num_cmds; i++){
+        printf("pid[%d] = %d\n", i, foreground_processes[i]);
+        if (foreground_processes[i] == pid){
+            printf("set pid %d to -1\n", pid);
+            foreground_processes[i] = -1;
+        }
+    }
+}
+
+bool keepWaiting(int *foreground_processes, int num_cmds){
+    int sum = 0;
+    for (int i = 0; i < num_cmds; i++){
+        printf("keep waiting for pid[%d] = %d\n", i, foreground_processes[i]);
+        sum += foreground_processes[i];
+    }
+
+    if (sum == (-1 * num_cmds)) {
+        return 0;
+    }else{
+        return 1;
     }
 }
 
@@ -312,14 +333,22 @@ char** removeOperators(char **tokens, char *operator, char* filename, int operat
     char **cmd_tokens = (char**) malloc((counter - 1) * sizeof(char*));
 
     int offset = 0;
+    int containsCommand = 0;
     for (int i = 0; tokens[i] != NULL; i++){
         if ((offset != 2) && (i == operator_loc || (i == operator_loc + 1))) {
-//            printf("removed token!: %s\n", tokens[i]);
+            printf("removed token!: %s\n", tokens[i]);
             offset++;
         }else{
-//            printf("saved token!: %s\n", tokens[i]);
+            printf("saved token!: %s\n", tokens[i]);
+            containsCommand = 1;
             cmd_tokens[i - offset] = tokens[i];
         }
+    }
+
+    if (containsCommand){
+        error = 1;
+        fprintf(stderr, "Error: Invalid null command.\n");
+        return NULL;
     }
 //    printf("done with that\n");
     cmd_tokens[counter-offset] = NULL;
