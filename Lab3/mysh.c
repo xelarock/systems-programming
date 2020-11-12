@@ -31,7 +31,8 @@ typedef struct {
 }CmdSet;
 
 Options parseArgs(int argc, char *argv[]);
-CmdSet parseCommands(char* cmd_line_args);
+CmdSet parseCommands(char *cmd_line_args);
+void checkForRedirectError(char *cmdargv);
 bool keepWaiting(int *foreground_processes, int num_cmds);
 void setForegroundProcess(int *foreground_processes, int pid, int num_cmds);
 char** removeOperators(char **tokens, int operator_loc);
@@ -58,6 +59,13 @@ int main(int argc, char **argv){
         if (strcmp(cmdargv, "") == 0)                                   // and go back to the top of while
             error = 1;                                                  // check for no cmd entered
 
+        // if the user types exit or control-d, exit shell
+        if( fgets_return == NULL || (strcmp(cmdargv, "exit") == 0)){
+            if (errno != EINTR){
+                exit(0);
+            }
+        }
+        checkForRedirectError(cmdargv);                                 // check for redirect errors
         CmdSet set_of_commands;                                         // create struct for all cmds
         if (!error){                                                    // if no error, parse the cmd line
             set_of_commands = parseCommands(cmdargv);
@@ -79,7 +87,7 @@ int main(int argc, char **argv){
                         error = 1;
                     }else if ((i == set_of_commands.num_commands - 1) && (strcmp(set_of_commands.cmd_list[i].input_file_name, "") != 0)){
                         // if the last cmd has an input file and pipe, error
-                        fprintf(stderr, "Error2: Ambiguous input redirection.\n");
+                        fprintf(stderr, "Error: Ambiguous input redirection.\n");
                         error = 1;
                     }else if ((i != 0) && (i != set_of_commands.num_commands - 1)){
                         // if a middle cmd has either an input or output file, error
@@ -87,7 +95,7 @@ int main(int argc, char **argv){
                             fprintf(stderr, "Error: Ambiguous output redirection.\n");
                             error = 1;
                         }else if ((strcmp(set_of_commands.cmd_list[i].input_file_name, "") != 0)){
-                            fprintf(stderr, "Error3: Ambiguous input redirection.\n");
+                            fprintf(stderr, "Error: Ambiguous input redirection.\n");
                             error = 1;
                         }
                     }
@@ -99,24 +107,10 @@ int main(int argc, char **argv){
                     break;
                 }
             }
-        }
-
-        if (!error){
-//            for (int i = 0; i < set_of_commands.num_commands; i++){
-//                printf("command %d\n", i);
-//                for (int j = 0; set_of_commands.cmd_list[i].cmd[j] != NULL; j++)
-//                    printf("Cmd: %s, %s, %s\n", set_of_commands.cmd_list[i].cmd[j],  set_of_commands.cmd_list[i].input_file_name,
-//                           set_of_commands.cmd_list[i].output_file_name);
-//            }
             // make space to save the foreground pids
             foreground_pids = (int *) malloc(set_of_commands.num_commands * sizeof(int));
-            // if the user types exit or control-d, exit shell
-            if( fgets_return == NULL || strcmp(set_of_commands.cmd_list[0].cmd[0], "exit") == 0){
-                if (errno != EINTR){
-                    exit(0);
-                }
-            }
         }
+
         // create pipes
         int pipefd[] = {-1, -1}, prevpipefd[] = {-1, -1};
         if (!error) {
@@ -129,26 +123,16 @@ int main(int argc, char **argv){
                 pid = fork();   // fork off child process
                 if (pid == 0) {
                     // child process
-//                    printf("child process!**************************** pid: %d, ppid: %d\n", getpid(), getppid());
                     int file_descriptor;
-//                    printf("Running command with output file: %s\n",
-//                           set_of_commands.cmd_list[cmd_index].output_file_name);
-//                    printf("right before pipe stuff\n");
                     if (set_of_commands.num_commands > 1) {             // if more than 1 cmd, handle duping pipes
-//                        fprintf(stderr, "pipe0: %d, pipe1: %d, prev0: %d, prev1: %d\n", pipefd[0], pipefd[1],
-//                                prevpipefd[0], prevpipefd[1]);
                         if (cmd_index == 0) {                   // if this is the first cmd in a cmd with pipes
-//                            printf("Command 0!!!!!!!! \n");
                             dup2(pipefd[1], 1);
                             close(pipefd[0]);
                             close(pipefd[1]);
-//                            fprintf(stderr, "read: %d, write: %d\n", pipefd[0], pipefd[1]);
                         } else if (cmd_index == set_of_commands.num_commands - 1) {     // if this is the last cmd
-//                            printf("command 2!!!!!!\n");
                             dup2(prevpipefd[0], 0);
                             close(prevpipefd[0]);
                         } else {
-//                            printf("Command 1!!!!!!!! \n");
                             dup2(prevpipefd[0], 0);             // if its a middle cmd with pipes on both sides
                             dup2(pipefd[1], 1);
                             close(pipefd[0]);
@@ -156,46 +140,33 @@ int main(int argc, char **argv){
                             close(prevpipefd[0]);
                         }
                     }
-//                    fprintf(stderr, "after pipe stuff: %s\n", set_of_commands.cmd_list[cmd_index].cmd[0]);
-
                     // if there is an output file, open it with either append or create it and dup
                     if ((strcmp(set_of_commands.cmd_list[cmd_index].output_file_name, "") != 0)) {
-//                        printf("output!\n");
                         if (set_of_commands.cmd_list[cmd_index].append == true) {
                             file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name,
                                                    O_CREAT | O_WRONLY | O_APPEND,
                                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
                         } else {
                             file_descriptor = open(set_of_commands.cmd_list[cmd_index].output_file_name,
-                                                   O_CREAT | O_WRONLY | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                                                   O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
                         }
                         if (file_descriptor == -1){
-//                            printf("error in output\n");
-                            perror("open");
+                            fprintf(stderr, "Error: open(\"%s\"): %s\n", set_of_commands.cmd_list[cmd_index].output_file_name, strerror(errno));
                             exit(0);
                         }
                         int dup_out = dup2(file_descriptor, 1);
                         close(file_descriptor);
                     }
-
                     // if there is an input file then open it and dup the fd
                     if ((strcmp(set_of_commands.cmd_list[cmd_index].input_file_name, "") != 0)) {
                         file_descriptor = open(set_of_commands.cmd_list[cmd_index].input_file_name, O_RDONLY);
-//                        printf("input: %d\n", file_descriptor);
                         if (file_descriptor == -1){
-//                            printf("error in input\n");
-                            perror("open");
+                            fprintf(stderr, "Error: open(\"%s\"): %s\n", set_of_commands.cmd_list[cmd_index].input_file_name, strerror(errno));
                             exit(0);
                         }
-//                        fprintf(stderr, "fd for open %d\n", file_descriptor);
                         int dup_out = dup2(file_descriptor, 0);
-//                        fprintf(stderr, "fd for input %d\n", dup_out);
                         close(file_descriptor);
                     }
-//                    fprintf(stderr, "about to execute cmd %s on pid %d\n", set_of_commands.cmd_list[cmd_index].cmd[0],
-//                            getpid());
-                    //                    close(pipefd[1]);
-                    //                    close(prevpipefd[1]);
                     // execute the cmd and check if it fails
                     if (execvp(set_of_commands.cmd_list[cmd_index].cmd[0], set_of_commands.cmd_list[cmd_index].cmd) ==
                         -1) {
@@ -204,28 +175,19 @@ int main(int argc, char **argv){
                     exit(-1);
                 } else {
                     // parent process
-                    //            struct rusage ru;
-//                    fprintf(stderr, "parent before wait\n");
-                    //            printf("boolean: %d\n", set_of_commands.foreground_process);
                     foreground_pids[cmd_index] = pid;       // add foreground pids to list for tracking
 
                     // if the cmd is a foreground process and you're at the last cmd, do the waiting
                     if (set_of_commands.foreground_process && (cmd_index == (set_of_commands.num_commands - 1))) {
-//                        printf("RUNNING LAST CMD\n");
-//                        printf("waiting for: %d, pid: %d, ppid: %d\n", pid, getpid(), getppid());
                         // keep waiting for all the foreground processes
                         while (keepWaiting(foreground_pids, set_of_commands.num_commands)) {
-//                            fprintf(stderr, "waiting!\n");
                             // wait for first child process that terminates
                             do{
                                 wpid = wait(&status);
                             }while(wpid == -1 && errno == EINTR);
                             // after waiting, set that process to have been waited for
                             setForegroundProcess(foreground_pids, wpid, set_of_commands.num_commands);
-//                            fprintf(stderr, "waited again for: %d\n", wpid);
                         }
-
-//                        printf("waited for pid with process id: %d\n", wpid);
                     }
                     // if theres a pipes, close fd's in the parent
                     if (set_of_commands.num_commands > 1) {
@@ -234,7 +196,62 @@ int main(int argc, char **argv){
                         prevpipefd[0] = pipefd[0];
                         prevpipefd[1] = pipefd[1];
                     }
-//                    printf("parent after wait************************\n");
+                }
+            }
+        }
+    }
+}
+
+// checks the cmd string for redirect errors
+void checkForRedirectError(char * cmdargv){
+    char** cmds = get_tokens(cmdargv, "|"); // split by pipe to get number of cmds
+    int num_cmds = 0;
+    while(cmds[num_cmds] != NULL){
+        num_cmds++;
+    }
+
+    char** tokens = get_tokens(cmdargv, " \t\n");       // get each part of total cmd as tokens
+    int counter = 0;
+    int input_num = 0, output_num = 0;
+    if (strcmp(&cmdargv[strlen(cmdargv) - 1], "|") == 0){     // if the last token is a pipe, error
+        fprintf(stderr, "Error: Ambiguous output redirection.\n");
+        error = 1;
+    }else{
+        for (int i = 0; tokens[i] != NULL; i++){              // iterate through each token
+            if (!error){
+                if (strcmp(tokens[i], "<") == 0){               // if there is more than one input, error
+                    input_num++;
+                    if (input_num >= 2){
+                        fprintf(stderr, "Error: Ambiguous input redirection.\n");
+                        error = 1;
+                    }
+                }else if (strcmp(tokens[i], ">") == 0){         // more than one output, error
+                    output_num++;
+                    if (output_num >= 2){
+                        fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                        error = 1;
+                    }
+                }else if (strcmp(tokens[i], ">>") == 0){        // more than one output error
+                    output_num++;
+                    if (output_num >= 2){
+                        fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                        error = 1;
+                    }
+                }else if (strcmp(tokens[i], "|") == 0){         // if theres a pipe, add an output to previous cmd
+                    output_num++;
+                    if (output_num >= 2){
+                        fprintf(stderr, "Error: Ambiguous output redirection.\n");  // if more than one output, error
+                        error = 1;
+                        output_num = 0;
+                    }else if (input_num >= 2 ){
+                        fprintf(stderr, "Error: Ambiguous input redirection.\n");   // if more than one input, error
+                        error = 1;
+                        input_num = 0;
+                    }else{
+                        counter++;                              // set the next cmd to already have one input from pipe
+                        input_num = 1;
+                        output_num = 0;
+                    }
                 }
             }
         }
@@ -244,9 +261,7 @@ int main(int argc, char **argv){
 // loop through the list of foreground pids and if that pid was waited for, set it to -1
 void setForegroundProcess(int *foreground_processes, int pid, int num_cmds){
     for (int i = 0; i < num_cmds; i++){
-//        printf("pid[%d] = %d\n", i, foreground_processes[i]);
         if (foreground_processes[i] == pid){
-//            printf("set pid %d to -1\n", pid);
             foreground_processes[i] = -1;
         }
     }
@@ -257,7 +272,6 @@ void setForegroundProcess(int *foreground_processes, int pid, int num_cmds){
 bool keepWaiting(int *foreground_processes, int num_cmds){
     int sum = 0;
     for (int i = 0; i < num_cmds; i++){
-//        printf("keep waiting for pid[%d] = %d\n", i, foreground_processes[i]);
         sum += foreground_processes[i];
     }
     if (sum == (-1 * num_cmds)) {
@@ -269,13 +283,10 @@ bool keepWaiting(int *foreground_processes, int num_cmds){
 // parse the cmd line that was given
 CmdSet parseCommands(char* cmd_line_args){
     CmdSet set_of_commands;
-//    printf("Command Line: %s\n", cmd_line_args);
     char *background_char;
     background_char = strchr(cmd_line_args, '&');       // look for background operator
-//    printf("background!: %s\n", background_char);
 
     if (strcmp(&cmd_line_args[strlen(cmd_line_args)-1], "&") == 0) {    // if  last character, save it as bkgd process
-//        printf("run in background!\n");
         cmd_line_args[strlen(cmd_line_args)-1] = '\0';
         set_of_commands.foreground_process = false;
     }else{                                                              // else it is a foreground process
@@ -291,10 +302,8 @@ CmdSet parseCommands(char* cmd_line_args){
         int num_cmds;
         int counter = 0;
         while (pipe_tokens[counter] != NULL) {                                // number of commands
-            printf("cmd %s\n", pipe_tokens[counter]);
             counter++;
         }
-//        printf("Number of commands!: %d\n", counter);
         set_of_commands.cmd_list = malloc(counter * sizeof(Cmd));   // malloc space for cmds
 
         for (num_cmds = 0; pipe_tokens[num_cmds] != NULL; num_cmds++) {             // for each cmd
@@ -304,27 +313,17 @@ CmdSet parseCommands(char* cmd_line_args){
             new_cmd.input_file_name = malloc(1024 * sizeof(char));             // malloc space for input and output
             new_cmd.output_file_name = malloc(1024 * sizeof(char));
             new_cmd.cmd = cmd_tokens;
-//            printf("hello!\n");
             for (int num_args = 0; new_cmd.cmd[num_args] != NULL; num_args++) {     // for each arg in a cmd
-//                printf("token cmd %d: %s\n", num_args, cmd_tokens[num_args]);
                 // if there is a output redirection check if its valid and then save it
                 if ((new_cmd.cmd[num_args] != NULL) && strcmp(new_cmd.cmd[num_args], ">") == 0) {
-                    printf("output name %s %d %d, %d\n", new_cmd.cmd[num_args + 1], counter, num_cmds, strcmp(new_cmd.cmd[num_args + 1], "") != 0);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for output redirection.\n");
                         error = 1;
                     } else if (strcmp(new_cmd.output_file_name, "") != 0) {
                         fprintf(stderr, "Error: Ambiguous output redirection.\n");
                         error = 1;
-                    }else if (strcmp(new_cmd.cmd[num_args + 1], "") != 0 && (num_cmds != counter-1)) {
-                        fprintf(stderr, "Error: Ambiguous output redirection.\n");
-                        error = 1;
-                    } else {
-                        printf("Output File %s\n", new_cmd.cmd[num_args + 1]);
-                        int file_descriptor = open(new_cmd.cmd[num_args + 1],
-                                               O_CREAT | O_WRONLY | O_EXCL,
-                                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-                        printf("f: %d\n", file_descriptor);
+                    }else {
+                        int file_descriptor = open(new_cmd.cmd[num_args + 1], O_WRONLY | O_EXCL | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
                         if (file_descriptor == -1){
                             fprintf(stderr, "Error: open(\"%s\"): %s\n", new_cmd.cmd[num_args + 1], strerror(errno));
                             error = 1;
@@ -332,25 +331,20 @@ CmdSet parseCommands(char* cmd_line_args){
                             close(file_descriptor);
                             new_cmd.output_file_name = new_cmd.cmd[num_args + 1];   // remove the operators from cmd
                             new_cmd.cmd = removeOperators(new_cmd.cmd, num_args);
-//                        printf("result: %s %d\n", new_cmd.cmd[0], num_args);
                             if (num_args != 0)  // go back one cause the operator has been removed
                                 num_args -= 1;
                         }
                     }
                 }
-
-//                printf("check here! %d\n", num_args);
                 // if there is a input redirection check if its valid and then save it
                 if ((new_cmd.cmd[num_args] != NULL) && strcmp(new_cmd.cmd[num_args], "<") == 0) {
-//                    printf("input name %s\n", new_cmd.input_file_name);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for input redirection.\n");
                         error = 1;
                     } else if (strcmp(new_cmd.input_file_name, "") != 0) {
-                        fprintf(stderr, "Error1: Ambiguous input redirection.\n");
+                        fprintf(stderr, "Error: Ambiguous input redirection.\n");
                         error = 1;
                     } else {
-//                        printf("input File %s\n", new_cmd.cmd[num_args + 1]);
                         int file_descriptor = open(new_cmd.cmd[num_args + 1], O_RDONLY);
                         // if the file descriptor errors (i.e no file, error)
                         if (file_descriptor == -1){
@@ -365,11 +359,8 @@ CmdSet parseCommands(char* cmd_line_args){
                         }
                     }
                 }
-
-//                printf("check before append\n");
                 // if there is a input redirection to append check if its valid and then save it
                 if ((new_cmd.cmd[num_args] != NULL) && strcmp(new_cmd.cmd[num_args], ">>") == 0) {
-//                    printf("output append name %s\n", new_cmd.output_file_name);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for output redirection.\n");
                         error = 1;
@@ -379,15 +370,12 @@ CmdSet parseCommands(char* cmd_line_args){
                     } else {
                         new_cmd.output_file_name = new_cmd.cmd[num_args + 1];
                         new_cmd.append = true;                              // set append to true and remove operators
-//                        printf("Output append File %s, %d\n", new_cmd.output_file_name, new_cmd.append);
                         new_cmd.cmd = removeOperators(new_cmd.cmd, num_args);
                         if (num_args != 0)          // go back one because operator was removed
                             num_args -= 1;
                     }
                 }
-
             }
-//            printf("adding cmd!\n");
             set_of_commands.cmd_list[num_cmds] = new_cmd;       // add the final parsed cmd to list
             set_of_commands.num_commands = counter;             // save number of cmds
         }
@@ -402,28 +390,17 @@ char** removeOperators(char **tokens, int operator_loc){
     while(tokens[counter] != NULL){
         counter++;
     }
-//    printf("counter out: %d\n", counter);
     char **cmd_tokens = (char**) malloc((counter - 1) * sizeof(char*)); // malloc space just cmds and NULL end
 
     int offset = 0;
-//    int containsCommand = 0;
     for (int i = 0; tokens[i] != NULL; i++){                                        // iterate through each arg
-//        printf("this is i in remove ops: %d and %s\n", i, tokens[i + 1]);
         if ((offset != 2) && (i == operator_loc || (i == operator_loc + 1))) {     // if its the operator or file,remove
-//            printf("removed token!: %s\n", tokens[i]);
             offset++;
         }else{                                                                      // otherwise keep it
-//            printf("saved token!: %s\n", tokens[i]);
-//            containsCommand = 1;
             cmd_tokens[i - offset] = tokens[i];
         }
     }
-
-//    printf("past the seg fault?? %d\n", containsCommand);
-//    printf("done with that\n");
     cmd_tokens[counter-offset] = NULL;                                      // set last index to NULL for end of cmd
-//    printf("counter - offset %d %d\n", counter, offset);
-
     return cmd_tokens;
 }
 
@@ -431,9 +408,8 @@ char** removeOperators(char **tokens, int operator_loc){
 Options parseArgs(int argc, char *argv[]){
     Options opts;
     if (argc == 1){                             // if no args, default prompt
-//        printf("default shell prompt\n");
         opts.promptType = 1;
-        opts.promptString = "mysh:";
+        opts.promptString = "mysh: ";
         return opts;
     }else if (argc == 2){                      // if  - then no prompt
         if (strcmp(argv[1], "-") == 0){
