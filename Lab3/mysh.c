@@ -113,7 +113,6 @@ int main(int argc, char **argv){
             // if the user types exit or control-d, exit shell
             if( fgets_return == NULL || strcmp(set_of_commands.cmd_list[0].cmd[0], "exit") == 0){
                 if (errno != EINTR){
-                    printf("Goodbye!\n");
                     exit(0);
                 }
             }
@@ -200,7 +199,7 @@ int main(int argc, char **argv){
                     // execute the cmd and check if it fails
                     if (execvp(set_of_commands.cmd_list[cmd_index].cmd[0], set_of_commands.cmd_list[cmd_index].cmd) ==
                         -1) {
-                        perror(set_of_commands.cmd_list[cmd_index].cmd[0]);
+                        perror("execvp()");
                     }
                     exit(-1);
                 } else {
@@ -291,8 +290,10 @@ CmdSet parseCommands(char* cmd_line_args){
         char **pipe_tokens = get_tokens(cmd_line_args, "|");        // otherwise split cmd by pipe
         int num_cmds;
         int counter = 0;
-        while (pipe_tokens[counter] != NULL)                                // number of commands
+        while (pipe_tokens[counter] != NULL) {                                // number of commands
+            printf("cmd %s\n", pipe_tokens[counter]);
             counter++;
+        }
 //        printf("Number of commands!: %d\n", counter);
         set_of_commands.cmd_list = malloc(counter * sizeof(Cmd));   // malloc space for cmds
 
@@ -308,20 +309,33 @@ CmdSet parseCommands(char* cmd_line_args){
 //                printf("token cmd %d: %s\n", num_args, cmd_tokens[num_args]);
                 // if there is a output redirection check if its valid and then save it
                 if ((new_cmd.cmd[num_args] != NULL) && strcmp(new_cmd.cmd[num_args], ">") == 0) {
-//                    printf("output name %s\n", new_cmd.output_file_name);
+                    printf("output name %s %d %d, %d\n", new_cmd.cmd[num_args + 1], counter, num_cmds, strcmp(new_cmd.cmd[num_args + 1], "") != 0);
                     if (new_cmd.cmd[num_args + 1] == NULL) {
                         fprintf(stderr, "Error: Missing filename for output redirection.\n");
                         error = 1;
                     } else if (strcmp(new_cmd.output_file_name, "") != 0) {
                         fprintf(stderr, "Error: Ambiguous output redirection.\n");
                         error = 1;
+                    }else if (strcmp(new_cmd.cmd[num_args + 1], "") != 0 && (num_cmds != counter-1)) {
+                        fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                        error = 1;
                     } else {
-//                        printf("Output File %s\n", new_cmd.cmd[num_args + 1]);
-                        new_cmd.output_file_name = new_cmd.cmd[num_args + 1];   // remove the operators from cmd
-                        new_cmd.cmd = removeOperators(new_cmd.cmd, num_args);
+                        printf("Output File %s\n", new_cmd.cmd[num_args + 1]);
+                        int file_descriptor = open(new_cmd.cmd[num_args + 1],
+                                               O_CREAT | O_WRONLY | O_EXCL,
+                                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                        printf("f: %d\n", file_descriptor);
+                        if (file_descriptor == -1){
+                            fprintf(stderr, "Error: open(\"%s\"): %s\n", new_cmd.cmd[num_args + 1], strerror(errno));
+                            error = 1;
+                        }else {
+                            close(file_descriptor);
+                            new_cmd.output_file_name = new_cmd.cmd[num_args + 1];   // remove the operators from cmd
+                            new_cmd.cmd = removeOperators(new_cmd.cmd, num_args);
 //                        printf("result: %s %d\n", new_cmd.cmd[0], num_args);
-                        if (num_args != 0)  // go back one cause the operator has been removed
-                            num_args -= 1;
+                            if (num_args != 0)  // go back one cause the operator has been removed
+                                num_args -= 1;
+                        }
                     }
                 }
 
